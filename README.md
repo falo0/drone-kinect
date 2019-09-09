@@ -1,10 +1,23 @@
 # Drone Kinect Tracking
 
-TODO project descr
+## Project Description:
+The goal of the project is to localize a drone. Various sensors might be used, like RGB-camera (webcam or RGB-cam of Kinect V2), depth sensor (Kinect V2), IMU of the drone, IR camera (of Kinect V2).
+
+## To Do:
+- 'ArUco Localization' of an ArUco marker sticked to the drone should work first. We want (x,y,z)-coordinates (of the center of the ArUco marker). It would be great if it worked with Kinect and normal webcams, so at least parts of the project can be used when no Kinect V2 is available.
+
+- Inclusion of the depth sensor: From OpenCV/ArUco we should know the pixel (x,y)-coordinates/indices of the center of the ArUco marker. We can look up the depth value at the same spot/pixel of the depth image.
+-- Convert a specific depth at a specific pixel to a (x,y,z)-coordinate
+
+- We now have (x,y,z)-coordinates derived from a camera and a depth sensor. Can we fuse these two data points to better estimate the true (x,y,z)-coordinate? We might use a Kalman filter, also considering past location estimates.
+
+If time is left:
+- Option A) Trying to get rid of the ArUco marker. If we only have a white background and a black drone it might be possible to detect the drone by brightness differences. If we have any steady background where the drone is the only thing moving, we can also detect the drone by comparing to the previous image and identifying the pixels that changed. If we have more challenging backgrounds, it's much harder but it can still be tried to approach it. We will need to train a neural net what a drone is at all orientations at which the drone might be in front of the camera. We need to draw the drone's contour on a lot of drone pictures by hand to get the training data.
+
+- Option B) If there is access to the IMU sensor data from the drone, we might also do IMU localization (this is data fusion from accelerometer, gyroscope, magnetometer, barometer, ...), just so we have a third location estimate to fuse with the camera and depth sensor data.
 
 ## Requirements
 
 python-numpy
 libfreenect2
 libfreenect2 python wrapper from https://github.com/37/py3freenect2/
-
