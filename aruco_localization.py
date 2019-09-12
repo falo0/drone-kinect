@@ -92,10 +92,119 @@ ax.set_zlabel('Unten_Oben')
 plt.show()
 
 
+#----------
+# Mein 3D Scatterplot Versuche
+# Bei einem ähnlichen code kriege ich wie hier erstmal nur graues Fenster
+# Also vielleicht liegt es an Spyder oder macOS oder so?
+plt.ion()
+
+fig = plt.figure()
+
+ax = fig.add_subplot(111, projection='3d')
+ax.set_xlabel('Links_Rechts')
+ax.set_ylabel('Entfernung')
+ax.set_zlabel('Unten_Oben')
+
+axes = plt.gca()
+axes.set_xlim([-0.4,0.4])
+axes.set_ylim([0, 7])
+axes.set_zlim([-0.4,0.4])
+
+scat = ax.scatter(tvecs[0:4,0], tvecs[0:4,2], -1 * tvecs[0:4,1], marker='o')
 
 
+plt.show()
 
-x = np.linspace(0, 6*np.pi, 100)
+for i in [4,5,6]:
+    offsets = tuple(tvecs[i,:])
+    print(offsets)
+    scat._offsets3d = offsets
+    #fig.canvas.draw()
+    #fig.canvas.flush_events()
+    fig.canvas.draw_idle()
+    plt.pause(1)
+
+#----------
+# Funktionierendes 2D-Scatterplot Beispiel:
+plt.ion()
+fig, ax = plt.subplots()
+x, y = [],[]
+sc = ax.scatter(x,y)
+plt.xlim(0,10)
+plt.ylim(0,10)
+
+plt.draw()
+for i in range(30):
+    x.append(np.random.rand(1)*10)
+    y.append(np.random.rand(1)*10)
+    print(x)
+    print(y)
+    offsets = np.c_[x,y]
+    print(offsets)
+    sc.set_offsets(offsets[-1:])
+    #sc.set_offsets(np.c_[x,y])
+    fig.canvas.draw_idle()
+    plt.pause(0.5)
+
+plt.waitforbuttonpress()
+#------------------------------
+# 3D Scatterplot Updateting, was laut eines github users funktionieren sollte
+# Aber genau wie bei meinem 3d plot bekomme ich nur ein graues Fenster
+from mpl_toolkits.mplot3d import Axes3D
+
+import numpy as np
+from matplotlib.animation import FuncAnimation
+import matplotlib.pyplot as plt
+
+G=6.67408e-11
+msol=1.989e40
+mter=5.972e24
+au=1.496e11
+dt=.0007
+N=30
+positions=np.random.rand(N,3)
+velocities=np.random.randn(N,3)
+acc=np.zeros_like(positions)
+masses=np.random.rand(N)
+
+def gravforce(m0,m1,pos0,pos1):
+    global G
+    dx=pos1[0]-pos0[0]
+    dy=pos1[1]-pos0[1]
+    dz=pos1[2]-pos0[2]
+    r=np.sqrt(dx**2+dy**2+dz**2)
+    f=-G*m0*m1/r**2
+    ratio=f/r
+    fx=dx*ratio
+    fy=dy*ratio
+    fz=dz*ratio
+    return fx, fy, fz
+
+fig,ax=plt.subplots(subplot_kw=dict(projection='3d'))
+planets=ax.scatter(positions[:,0],positions[:,1],positions[:,2],c='b',marker='o')
+
+def animate(i):
+    acc[:,0]=[sum([gravforce(masses[i],masses[j],positions[i],positions[j])[0]/masses[j] for j in range(1,N) if j != i]) for i in range(len(acc))]
+    acc[:,1]=[sum([gravforce(masses[i],masses[j],positions[i],positions[j])[1]/masses[j] for j in range(1,N) if j != i]) for i in range(len(acc))]
+    acc[:,2]=[sum([gravforce(masses[i],masses[j],positions[i],positions[j])[2]/masses[j] for j in range(1,N) if j != i]) for i in range(len(acc))]
+
+    velocities[:,0]=velocities[:,0]+acc[:,0]*dt
+    velocities[:,1]=velocities[:,1]+acc[:,1]*dt
+    velocities[:,2]=velocities[:,2]+acc[:,2]*dt        
+
+    positions[:,0]=positions[:,0]+velocities[:,0]*dt
+    positions[:,1]=positions[:,1]+velocities[:,1]*dt
+    positions[:,2]=positions[:,2]+velocities[:,2]*dt
+
+    planets.set_sizes(masses[:]*20)
+    planets._offsets3d(positions[:,0],positions[:,1],positions[:2])
+
+ani=FuncAnimation(fig,animate,frames=1000,interval=1,blit=False)
+
+#------------------------
+
+
+x = np.linspace(0, 6*np.pi, 1000)
 y = np.sin(x)
 
 # You probably won't need this if you're embedding things in a tkinter plot...
@@ -108,7 +217,25 @@ line1, = ax.plot(x, y, 'r-') # Returns a tuple of line objects, thus the comma
 for phase in np.linspace(0, 10*np.pi, 500):
     line1.set_ydata(np.sin(x + phase))
     fig.canvas.draw()
-    fig.canvas.flush_events()
+    plt.pause(0.01)
+   # fig.canvas.flush_events()
+    
+    
+    
+    
+    
+    
+X = np.linspace(0,2,1000)
+Y = X**2 + np.random.random(X.shape)
+
+plt.ion()
+graph = plt.plot(X,Y)[0]
+
+while True:
+    Y = X**2 + np.random.random(X.shape)
+    graph.set_ydata(Y)
+    plt.draw()
+    plt.pause(0.01)
 
 
 
@@ -130,7 +257,80 @@ for phase in np.linspace(0, 10*np.pi, 100):
     #plt.display(fig)
     fig.canvas.draw()
     fig.canvas.flush_events()
+    
 
+########
+
+
+plt.ion()
+fig, ax = plt.subplots()
+x, y = [],[]
+sc = ax.scatter(x,y)
+plt.xlim(0,10)
+plt.ylim(0,10)
+
+plt.draw()
+for i in range(1000):
+    x.append(np.random.rand(1)*10)
+    y.append(np.random.rand(1)*10)
+    print(x)
+    print(y)
+    offsets = np.c_[x,y]
+    print(offsets)
+    sc.set_offsets(offsets[-1:])
+    #sc.set_offsets(np.c_[x,y])
+    fig.canvas.draw_idle()
+    plt.pause(1)
+
+plt.waitforbuttonpress()
+
+#######
+
+from matplotlib.animation import FuncAnimation
+G=6.67408e-11
+msol=1.989e40
+mter=5.972e24
+au=1.496e11
+dt=.0007
+N=30
+positions=np.random.rand(N,3)
+velocities=np.random.randn(N,3)
+acc=np.zeros_like(positions)
+masses=np.random.rand(N)
+
+def gravforce(m0,m1,pos0,pos1):
+    global G
+    dx=pos1[0]-pos0[0]
+    dy=pos1[1]-pos0[1]
+    dz=pos1[2]-pos0[2]
+    r=np.sqrt(dx**2+dy**2+dz**2)
+    f=-G*m0*m1/r**2
+    ratio=f/r
+    fx=dx*ratio
+    fy=dy*ratio
+    fz=dz*ratio
+    return fx, fy, fz
+
+fig,ax=plt.subplots(subplot_kw=dict(projection='3d'))
+planets=ax.scatter(positions[:,0],positions[:,1],positions[:,2],c='b',marker='o')
+
+def animate(i):
+    acc[:,0]=[sum([gravforce(masses[i],masses[j],positions[i],positions[j])[0]/masses[j] for j in range(1,N) if j != i]) for i in range(len(acc))]
+    acc[:,1]=[sum([gravforce(masses[i],masses[j],positions[i],positions[j])[1]/masses[j] for j in range(1,N) if j != i]) for i in range(len(acc))]
+    acc[:,2]=[sum([gravforce(masses[i],masses[j],positions[i],positions[j])[2]/masses[j] for j in range(1,N) if j != i]) for i in range(len(acc))]
+
+    velocities[:,0]=velocities[:,0]+acc[:,0]*dt
+    velocities[:,1]=velocities[:,1]+acc[:,1]*dt
+    velocities[:,2]=velocities[:,2]+acc[:,2]*dt        
+
+    positions[:,0]=positions[:,0]+velocities[:,0]*dt
+    positions[:,1]=positions[:,1]+velocities[:,1]*dt
+    positions[:,2]=positions[:,2]+velocities[:,2]*dt
+
+    planets.set_sizes(masses[:]*20)
+    planets._offsets3d = (positions[:,0],positions[:,1],positions[:2])
+
+ani=FuncAnimation(fig,animate,frames=1000,interval=1,blit=False)
 
 
 
