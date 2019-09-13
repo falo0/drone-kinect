@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+#For Spyder: Swicht Matplot from inline to auto
+#%matplotlib auto
+#%matplotlib inline
+
 import cv2
 import cv2.aruco as aruco
 import glob
@@ -7,94 +11,106 @@ import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D #registers 3D projection, otherwise unused
 import numpy as np
-from os import chdir, getcwd
+from os import chdir
+import time
 
-# Read In The Camera Callibration Data, Created In camera_calibration.py
-cv_file = cv2.FileStorage("camera_calibration/MBP13Late2015Distortion.yaml", cv2.FILE_STORAGE_READ)
-matrix_coefficients = cv_file.getNode("camera_matrix").mat()
-distortion_coefficients = cv_file.getNode("dist_coeff").mat()
-cv_file.release()
-# Define Which ArUco Marker(s) We Use (here we use 6 by 6 bits)
-aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
-# Define The Detector Parameters
-parameters =  cv2.aruco.DetectorParameters_create()
 
-#For Spyder: Swicht Matplot from inline to auto
-#%matplotlib auto
-#%matplotlib inline
 
-#%matplotlib qt
-#%matplotlib osx
 
-#----------------------------------
-# Draw Marker Boarders With Images From Video Stream
-# =============================================================================
-# cap = cv2.VideoCapture(0)
-# 
-# for i in range(3):
-#     ret, frame = cap.read()
-#     
-#     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#     
-#     parameters =  cv2.aruco.DetectorParameters_create()
-#     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-#     frame_markers = cv2.aruco.drawDetectedMarkers(frame.copy(), corners, ids)
-#     
-#     #cv2.imshow('frame_markers', frame_markers)
-#     matplotlib.pyplot.imshow(frame_markers)
-#     matplotlib.pyplot.imshow(frame)
-#     matplotlib.pyplot.imshow(gray, cmap = "gray")
-#     
-# 
-# cap.release()
-# 
-# frame.shape
-# frame[0,0]
-# frame
-# corners[0]
-#---------------------------------
 
-# 2d Scatter Plot Setup for now until 3D scatter plot works
+
+
+## DEFINE LOCALIZATION ALGORITHMS ##
+# They should all return np.array([x, y, z]) in meters
+
+# For webcam, Kinect RGB cam and maybe when it's dark Kinect IR cam:
+def localize_aruco(frame, matrix_coefficients, distortion_coefficients):
+    # The following setup might be used once outside the function
+    # Define Which ArUco Marker(s) We Use (here we use 6 by 6 bits)
+    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+    # Define The Detector Parameters
+    parameters =  cv2.aruco.DetectorParameters_create()
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+    rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners, 0.07, matrix_coefficients, distortion_coefficients)
+    if tvec is not None:
+        return tvec[0,0] #assuming there is only one marker in the image
+    else:
+        return None
+    
+# For Kinect depth sensor
+def localize_depth(frame):
+    return np.array([42, 42, 42])
+
+# For drone IMU
+def localize_imu(frame):
+    return np.array([42, 42, 42])
+
+
+
+## SET UP PLOT ##
+# For now 2d scatter plot as live updates for 3D scatter plot don't work yet
 plt.ion()
 fig, ax = plt.subplots()
 x, y = [],[]
 sc = ax.scatter(x,y)
 plt.xlim(-0.3,0.3)
 plt.ylim(-0.3,0.3)
-plt.draw()
+#plt.draw()
 
-#Localization With Webcam
-#--------
-cap = cv2.VideoCapture(0)
 
+## INITIAL SENSOR SETTINGS ##
+#read in webcam calibration data, created in camera_calibration.py
+cv_file = cv2.FileStorage("camera_calibration/MBP13Late2015Distortion.yaml", cv2.FILE_STORAGE_READ)
+wc_matrix_coefficients = cv_file.getNode("camera_matrix").mat()
+wc_distortion_coefficients = cv_file.getNode("dist_coeff").mat()
+cv_file.release()
+
+
+## GET ALL SENSORS REDY ##
+wc_cap = cv2.VideoCapture(0)
+
+
+## REPETITIVE PROCESS OF OBTAINING AND PROCESSING SENSOR DATA ##
 for i in range(1000):
-    ret, frame = cap.read()
-    if not ret:
+    ## READ ALL SENSORS, GET TIMESTAMPS ##
+    # Sensor: WebCam
+    wc_ret, wc_frame = wc_cap.read()
+    wc_t = time.time()
+    # Sensor: Kinect rgb Cam
+    kc_frame = 42
+    kc_t = time.time()
+    # Sensor: Kinect Depth sensor -> kd
+    kd_frame = 42
+    kd_t = time.time()
+    
+    ## SENSOR READING ERRORS ##
+    if not wc_ret:
         print("Error: No Image Frame Obtained From The Webcam")
         break
-    
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-    rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners, 0.07, matrix_coefficients, distortion_coefficients)
-    if tvec is None:
-        print("skipping frame: no translation vector could be obtained in this frame.")
+
+    ## GET LOCALIZATIONS ACCORDING TO ERRORS, COMBINE WITH TIMESTAMPS ##
+    wc_xyz = localize_aruco(wc_frame)
+    if wc_xyz is None:
+        print("skipping Webcam frame: no translation vector could be obtained in this frame.")
         pass
     else:
-        webcam_xyz = tvec[0,0] # if there is only one marker in the picture
-        print(webcam_xyz)
+        wc_xyzt = np.append(wc_xyz, wc_t)
+        print(wc_xyzt)
         
-        #plot (only 2D for now)
-        sc.set_offsets(-1 * webcam_xyz[[0,1]]) #only select what is "links-rechts" and "oben-unten" axes and mirror it
+        ## PLOT THE LOCALIZATIONS ## 
+        #(only 2D for now)
+        sc.set_offsets(-1 * wc_xyzt[[0,1]]) #only select what is "links-rechts" and "oben-unten" axes and mirror it
         fig.canvas.draw_idle()
         plt.pause(0.01)
     
-    
-cap.release()
+## TURN OFF / DISCONNECT ALL SENSORS ##    
+wc_cap.release()
+
 
 #--------------------------------
 
-tvec[0,0,[0,2]]
--1*webcam_xyz[[0,1]]
 
 
 # Working With Stored Images For Debugging
