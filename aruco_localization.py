@@ -27,7 +27,7 @@ parameters =  cv2.aruco.DetectorParameters_create()
 #%matplotlib osx
 
 #----------------------------------
-# Working With Images From Video Stream
+# Draw Marker Boarders With Images From Video Stream
 # =============================================================================
 # cap = cv2.VideoCapture(0)
 # 
@@ -52,8 +52,49 @@ parameters =  cv2.aruco.DetectorParameters_create()
 # frame[0,0]
 # frame
 # corners[0]
-# =============================================================================
-#----------------------------------
+#---------------------------------
+
+# 2d Scatter Plot Setup for now until 3D scatter plot works
+plt.ion()
+fig, ax = plt.subplots()
+x, y = [],[]
+sc = ax.scatter(x,y)
+plt.xlim(-0.3,0.3)
+plt.ylim(-0.3,0.3)
+plt.draw()
+
+#Localization With Webcam
+#--------
+cap = cv2.VideoCapture(0)
+
+for i in range(1000):
+    ret, frame = cap.read()
+    if not ret:
+        print("Error: No Image Frame Obtained From The Webcam")
+        break
+    
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+    rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners, 0.07, matrix_coefficients, distortion_coefficients)
+    if tvec is None:
+        print("skipping frame: no translation vector could be obtained in this frame.")
+        pass
+    else:
+        webcam_xyz = tvec[0,0] # if there is only one marker in the picture
+        print(webcam_xyz)
+        
+        #plot (only 2D for now)
+        sc.set_offsets(-1 * webcam_xyz[[0,1]]) #only select what is "links-rechts" and "oben-unten" axes and mirror it
+        fig.canvas.draw_idle()
+        plt.pause(0.01)
+    
+    
+cap.release()
+
+#--------------------------------
+
+tvec[0,0,[0,2]]
+-1*webcam_xyz[[0,1]]
 
 
 # Working With Stored Images For Debugging
