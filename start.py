@@ -50,9 +50,6 @@ def kalman_estimation(xyzt_list):
     else:
         return None
 
-test = [np.array([1, 2, 3, 4])]
-test[0][:3]
-[None]
 
 ## SET UP PLOT ##
 # For now 2d scatter plot as live updates for 3D scatter plot don't work yet
@@ -116,7 +113,7 @@ for i in range(1000):
         
     ## FUSE ALL LOCALIZATIONS ##
     #example when just using Kinect cam and depth sensor:
-    #kalman_estimation[kc_xyzt, kd_xyzt])
+    #kalman_estimation([kc_xyzt, kd_xyzt])
     
     #Just using wc_xyzt, which is already enough for a Kalman filter, as it
     #can fuse estimations from past values and current camera observations
