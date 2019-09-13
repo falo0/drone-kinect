@@ -52,10 +52,14 @@ def kalman_estimation(xyzt_list):
 
 
 ## SET UP PLOT ##
+# The default is to plot 3d, although plotting only x,y dimensions is less buggy for now
+plot2D = False
+#plot2D = True
+
 
 # -- 2D Plot (tested) --
 # For now 2d scatter plot as live updates for 3D scatter plot don't work yet
-if False:
+if plot2D:
     plt.ion()
     fig, ax = plt.subplots()
     x, y = [],[]
@@ -69,7 +73,7 @@ if False:
             plt.pause(0.01)
         
 # -- 3D Plot --
-if True:
+if not plot2D:
     plt.ion()
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -158,12 +162,14 @@ for i in range(1000):
 
     ## UPDATE THE PLOT ##
     # Just plot the Kalman estimation:
-    # update_2dplot(kalman_xyz)
-    update_3dplot(kalman_xyz)
+    if plot2D:
+        update_2dplot(kalman_xyz)
+    else:
+        update_3dplot(kalman_xyz)
     
-    #Plot sensor localizations and kalman estimation
+    #Plot sensor localizations and kalman estimation - 3 points with differnt colors
     #points = np.vstack([wc_xyz, simsens_xyz, kalman_xyz])
-    #update_plot(points)
+    #update_3dplot(points)
     
     
     
