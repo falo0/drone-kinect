@@ -180,6 +180,7 @@ def update_offsets(i):
     offsets = ([points[i,0]], [points[i,2]], [-1 * points[i,1]])
     print(offsets)
     scat._offsets3d = offsets
+    #fig.canvas.flush_events()
     
 FuncAnimation(fig, update_offsets,frames=3,interval=500)
 

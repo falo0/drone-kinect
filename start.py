@@ -52,19 +52,43 @@ def kalman_estimation(xyzt_list):
 
 
 ## SET UP PLOT ##
-# For now 2d scatter plot as live updates for 3D scatter plot don't work yet
-plt.ion()
-fig, ax = plt.subplots()
-x, y = [],[]
-sc = ax.scatter(x,y)
-plt.xlim(-0.3,0.3)
-plt.ylim(-0.3,0.3)
 
-def update_plot(coords):
-    if coords is not None:
-        sc.set_offsets(-1 * coords[[0,1]]) #only select what is "links-rechts" and "oben-unten" axes and mirror it
-        fig.canvas.draw_idle()
-        plt.pause(0.01)
+# -- 2D Plot (tested) --
+# For now 2d scatter plot as live updates for 3D scatter plot don't work yet
+if False:
+    plt.ion()
+    fig, ax = plt.subplots()
+    x, y = [],[]
+    sc = ax.scatter(x,y)
+    plt.xlim(-0.3,0.3)
+    plt.ylim(-0.3,0.3)
+    def update_2dplot(coords):
+        if coords is not None:
+            sc.set_offsets(-1 * coords[[0,1]]) #only select what is "links-rechts" and "oben-unten" axes and mirror it
+            fig.canvas.draw_idle()
+            plt.pause(0.01)
+        
+# -- 3D Plot --
+if True:
+    plt.ion()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_xlabel('Links_Rechts')
+    ax.set_ylabel('Entfernung')
+    ax.set_zlabel('Unten_Oben')
+    axes = plt.gca()
+    axes.set_xlim([-0.3,0.3])
+    axes.set_ylim([0, 7])
+    axes.set_zlim([-0.3,0.3])
+    scat = ax.scatter([], [], [], c='b', marker='o')       
+    def update_3dplot(coords):
+        if coords is not None:
+            offsets = ([-1 * coords[0]], [coords[2]], [-1 * coords[1]])
+            print("offsets")
+            print(offsets)
+            scat._offsets3d = offsets
+            fig.canvas.draw_idle()
+            plt.pause(0.01)
 
 
 ## INITIAL SENSOR SETTINGS ##
@@ -134,7 +158,8 @@ for i in range(1000):
 
     ## UPDATE THE PLOT ##
     # Just plot the Kalman estimation:
-    update_plot(kalman_xyz)
+    # update_2dplot(kalman_xyz)
+    update_3dplot(kalman_xyz)
     
     #Plot sensor localizations and kalman estimation
     #points = np.vstack([wc_xyz, simsens_xyz, kalman_xyz])
