@@ -1,2 +1,4 @@
-markers.pdf
+/libfreenect2/kinect_wrapper.so
+__pycache__
+/test/markers.pdf
 
