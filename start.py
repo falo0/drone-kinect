@@ -20,13 +20,16 @@ import time
 def localize_aruco(frame, matrix_coefficients, distortion_coefficients):
     # The following setup might be used once outside the function
     # Define Which ArUco Marker(s) We Use (here we use 6 by 6 bits)
-    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+    # aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
     # Define The Detector Parameters
     parameters =  cv2.aruco.DetectorParameters_create()
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-    rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners, 0.07, matrix_coefficients, distortion_coefficients)
+    
+    # side length of the used ArUco marker: 0.105 meters
+    rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners, 0.105, matrix_coefficients, distortion_coefficients)
     if tvec is not None:
         return tvec[0,0] #assuming there is only one marker in the image
     else:
@@ -81,15 +84,19 @@ if not plot2D:
     ax.set_ylabel('Entfernung')
     ax.set_zlabel('Unten_Oben')
     axes = plt.gca()
-    axes.set_xlim([-0.3,0.3])
+    axes.set_xlim([-0.5,0.5])
     axes.set_ylim([0, 7])
     axes.set_zlim([-0.3,0.3])
     scat = ax.scatter([], [], [], c='b', marker='o')       
     def update_3dplot(coords):
         if coords is not None:
-            offsets = ([-1 * coords[0]], [coords[2]], [-1 * coords[1]])
-            print("offsets")
-            print(offsets)
+            # for some reasons, "Links_Rechts"-values only give roughly half the meters and
+            # "Entfernung"-values roughly give double the meters. Using 2 and 0.5 as prefactors solves this
+            # now the coordinates are very roughly correct in all dimensions, they are given in meters.
+            # but its still not perfect, probably the calibration is wrong.
+            offsets = ([-1 * 2 * coords[0]],  [0.5 * coords[2]], [-1 * coords[1]])
+            #print("offsets")
+            #print(offsets)
             scat._offsets3d = offsets
             fig.canvas.draw_idle()
             plt.pause(0.01)
@@ -108,7 +115,8 @@ wc_cap = cv2.VideoCapture(0)
 
 
 ## REPETITIVE PROCESS OF OBTAINING AND PROCESSING SENSOR DATA ##
-for i in range(1000):
+verbose = False
+while True:
     ## READ ALL SENSORS, GET TIMESTAMPS ##
     # Sensor: WebCam
     wc_ret, wc_frame = wc_cap.read()
@@ -123,18 +131,18 @@ for i in range(1000):
     
     ## SENSOR READING ERRORS ##
     if not wc_ret:
-        print("Error: No Image Frame Obtained From The Webcam")
+        if verbose: print("Error: No Image Frame Obtained From The Webcam")
         break
     
 
     ## GET LOCALIZATIONS ACCORDING TO ERRORS, COMBINE WITH TIMESTAMPS ##
     wc_xyz = localize_aruco(wc_frame, wc_matrix_coefficients, wc_distortion_coefficients)
     if wc_xyz is None:
-        print("skipping Webcam frame: no translation vector could be obtained in this frame.")
+        if verbose: print("skipping Webcam frame: no translation vector could be obtained in this frame.")
         wc_xyzt = None
     else:
         wc_xyzt = np.append(wc_xyz, wc_t)
-        print(wc_xyzt)    
+        if verbose: print(wc_xyzt)    
     #When just using Kinect cam and depth sensor: get kc_xyzt, kd_xyzt
     #For DRone IMU, get dr_xyzt
         

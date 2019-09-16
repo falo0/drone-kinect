@@ -21,7 +21,7 @@ objp[:, :2] = np.mgrid[0:cbcol, 0:cbrow].T.reshape(-1, 2)
 objpoints = [] # 3d point in real world space
 imgpoints = [] # 2d points in image plane.
 
-images = glob.glob('calib_images/*.jpg')
+images = glob.glob('../calib_images/*.jpg')
 
 
 
