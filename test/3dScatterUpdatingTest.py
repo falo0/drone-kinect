@@ -55,5 +55,5 @@ def animate(i):
     planets.set_sizes(masses[:]*20)
     #planets._offsets3d = (positions[:,0],positions[:,1],positions[:2])
 
-ani=FuncAnimation(fig,animate,frames=1000,interval=1,blit=False)
+ani=FuncAnimation(fig,animate,frames=1000,interval=100,blit=False)
 plt.show()
