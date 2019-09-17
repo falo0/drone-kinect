@@ -12,6 +12,9 @@ from mpl_toolkits.mplot3d import Axes3D #registers 3D projection, otherwise unus
 import numpy as np
 import time
 
+from pykalman import KalmanFilter
+import numpy as np
+
 
 ## DEFINE LOCALIZATION ALGORITHMS ##
 # They should all return np.array([x, y, z]) in meters
@@ -46,10 +49,40 @@ def localize_imu(frame):
 
 
 ## DEFINE SENSOR FUSION ALGORITHM ##
+# simple kalman update
+def kalman_update(z_k):
+    
+    global x_prev_posterior
+    global P_prev_posterior
+    
+    ### TIME UPDATE ###
+    x_k_prior = np.matmul(A, x_prev_posterior)
+    P_k_prior = P_prev_posterior
+    
+    
+    ### MEASURMENT UPDATE ###
+    K_k = np.matmul(P_k_prior, np.linalg.inv(P_k_prior + R))
+    
+    x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - x_k_prior))
+    P_k_posterior = np.matmul((np.identity(3) - K_k), P_k_prior)
+    
+    # The current _k becomes _prev for the next time step, therefore
+    # update the global variables
+    x_prev_posterior = x_k_posterior
+    P_prev_posterior = P_k_posterior
+    
+    return(x_k_posterior)   
+
 #kalman_estimation expects a list of xyzt localizations of different sensors
 def kalman_estimation(xyzt_list):
     if xyzt_list[0] is not None:
-        return xyzt_list[0][:3] #for now it just returns the xyz of the first xyzt vector that it was given.
+        # Measurement vector z_k
+        # For now it just takes the xyz of the first xyzt vector that it was given.
+        z_k = xyzt_list[0][:3]
+        print(z_k)
+        kalman_xyz = kalman_update(z_k)
+        print(kalman_xyz)
+        return kalman_xyz
     else:
         return None
 
@@ -100,6 +133,21 @@ if not plot2D:
             scat._offsets3d = offsets
             fig.canvas.draw_idle()
             plt.pause(0.01)
+
+## SET UP KALMAN FILTER ##
+# initialization of the state vector x. It contains the the 3 coordinates of a point
+x0 = np.array([0,0,0])
+x_prev_posterior = x0
+# state transition matrix A. Here, the simple assumption is that the location of the
+# point doesn't change.
+A = np.identity(3)
+# initialize the covariance matrix of the posterior state estimation error x_k_true - x_k_posterior
+# We just just assume P to be an identity matrix for simplicity and lack of better knowledge
+P0 = np.identity(3)
+P_prev_posterior = P0
+# covariance matrix of the measurement error x_k_true - z_k
+R = np.identity(3)
+
 
 
 ## INITIAL SENSOR SETTINGS ##
@@ -184,3 +232,14 @@ while True:
     
 ## TURN OFF / DISCONNECT ALL SENSORS ##    
 wc_cap.release()
+
+
+#import numpy as np
+#a = np.array([[0,1.2], [2,4]])
+#a = np.array([[0,0], [0,2]])#
+#nonzeros = a[np.nonzero(a)]
+#if nonzeros.size != 0:
+#    minvalue = np.min(nonzeros)
+#    coords = np.where(a == minvalue)
+#else:
+#    print("object in front of Kinect")
