@@ -18,8 +18,11 @@ if('--no-depth' not in sys.argv):
 while True:
 	kmr = kinect.getData()
 	#print('dtime %f : %s' % (kmr.dtime.total_seconds(), str(kmr.coords)))
-	filtered = kalman.filter(kmr.dtime, kmr.coords)
-	print('3D coords: %s' % (filtered))
+	if(len(kmr.coords) > 0):
+		filtered = kalman.filter(kmr.dtime, kmr.coords)
+		print('3D coords: %s' % (filtered))
+	else:
+		print('3D coords: NO DATA')
 
 	# frame progression for rendered modules
 	cv2.waitKey(1)
