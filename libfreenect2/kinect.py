@@ -56,9 +56,10 @@ def getData():
 	_kmr.coords = []
 	for mod in _registered_modules:
 		module = mod['module']
-		_kmr.coords.append(module.calc(_kd, mod['render']))
+		module_res = module.calc(_kd, mod['render'])
+		if module_res is not None:
+			_kmr.coords.append(module_res)
 	
-
 	return _kmr
 
 
