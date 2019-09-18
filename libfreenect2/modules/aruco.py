@@ -15,5 +15,5 @@ def calc(data, render):
 	if len(corners) > 0:
 		#TODO calc marker distance and center
 		return corners[0]
-	return [1, 1, 1]
+	return None
 

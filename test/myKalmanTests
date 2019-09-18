@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 17 18:13:26 2019
+
+@author: Dolan
+"""
+
+# This file is just the formulas from http://bilgin.esme.org/BitsAndBytes/KalmanFilterforDummies
+# written as python code.
+# The assumptions are simple but not implausible for our case. This kalman
+# filter should already do useful and meaningful stuff and is a good starting point.
+
+import numpy as np
+
+### INITIALIZATION ###
+# initialization of the state vector x. It contains the the 3 coordinates of a point
+x0 = np.array([0,0,0])
+x_prev_posterior = x0
+# state transition matrix A. Here, the simple assumption is that the location of the
+# point doesn't change.
+A = np.identity(3)
+# initialize the covariance matrix of the posterior state estimation error x_k_true - x_k_posterior
+# We just just assume P to be an identity matrix for simplicity and lack of better knowledge
+P0 = np.identity(3)
+P_prev_posterior = P0
+
+# covariance matrix of the measurement error x_k_true - z_k
+R = np.identity(3)
+
+def update(z_k):
+    
+    global x_prev_posterior
+    global P_prev_posterior
+    
+    ### TIME UPDATE ###
+    x_k_prior = np.matmul(A, x_prev_posterior)
+    P_k_prior = P_prev_posterior
+    
+    
+    ### MEASURMENT UPDATE ###
+    K_k = np.matmul(P_k_prior, np.linalg.inv(P_k_prior + R))
+    
+    x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - x_k_prior))
+    P_k_posterior = np.matmul((np.identity(3) - K_k), P_k_prior)
+    
+    # The current _k becomes _prev for the next time step, therefore
+    # update the global variables
+    x_prev_posterior = x_k_posterior
+    P_prev_posterior = P_k_posterior
+    
+    return(x_k_posterior)
+    
+
+# let's say our first measurement is
+z_k = np.array([3,3,3])
+update(z_k)
+
+# let's assume one dt (e.g. 1 second) has passed and the sensor still
+# measures exactly the same
+update(np.array([3,3,3]))
