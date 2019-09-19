@@ -167,16 +167,17 @@ if not plot2D:
     axes.set_xlim([-0.5,0.5])
     axes.set_ylim([0, 7])
     axes.set_zlim([-0.3,0.3])
-    scat = ax.scatter([], [], [], c='b', marker='o')       
-    def update_3dplot(coords):
-        if coords is not None:
-            # for some reasons, "Links_Rechts"-values only give roughly half the meters and
-            # "Entfernung"-values roughly give double the meters. Using 2 and 0.5 as prefactors solves this
-            # now the coordinates are very roughly correct in all dimensions, they are given in meters.
-            # but its still not perfect, probably the calibration is wrong.
-            offsets = ([-1 * 2 * coords[0]],  [0.5 * coords[2]], [-1 * coords[1]])
-            #print("offsets")
-            #print(offsets)
+    #scat = ax.scatter([], [], [], c='b', marker='o')   
+    scat = ax.scatter([], [], [], c=['r', 'b'], marker='o')         
+    def update_3dplot(coords, colors):
+        #if coords is not None:
+        if coords.dtype is np.dtype('float64'): #andernfalls kann es dtype('O') haben und nur None enthalten
+            
+            #scat._offsets3d needs a list per coordinate dimension, not an np.array!
+            # offsets = ([-1 * 2 * coords[:,0]],  [0.5 * coords[:,2]], [-1 * coords[:,1]])
+            offsets = (coords[:,0].tolist(), coords[:,2].tolist(), coords[:,1].tolist())
+            print("offsets")
+            print(offsets)
             scat._offsets3d = offsets
             fig.canvas.draw_idle()
             plt.pause(0.01)
@@ -222,8 +223,22 @@ while True:
         if verbose: print("skipping Webcam frame: no translation vector could be obtained in this frame.")
         wc_xyzt = None
     else:
+        #w_xyz = np.array([1,2,3])
+        #Transform wc_xyz
+        # for some reasons, "Links_Rechts"-values only give roughly half the meters and
+            # "Entfernung"-values roughly give double the meters. Using 2 and 0.5 as prefactors solves this
+            # now the coordinates are very roughly correct in all dimensions, they are given in meters.
+            # but its still not perfect, probably the calibration is wrong.
+        #[-1 * 2 * coords[:,0]],  [0.5 * coords[:,2]], [-1 * coords[:,1]]
+        wc_xyz = np.multiply(wc_xyz, np.array([-2., -1., 0.5]))
+        
+        #Add time
         wc_xyzt = np.append(wc_xyz, wc_t)
-        if verbose: print(wc_xyzt)    
+        if verbose: print(wc_xyzt)
+    
+    #kc_xyz = localize_aruco(kc_frame, kc_matrix_coefficients, kc_distortion_coefficients)
+    #kd_xyz = localize_depth(...)    
+    
     #When just using Kinect cam and depth sensor: get kc_xyzt, kd_xyzt
     #For DRone IMU, get dr_xyzt
         
@@ -254,7 +269,10 @@ while True:
     if plot2D:
         update_2dplot(kalman_xyz)
     else:
-        update_3dplot(kalman_xyz)
+        #coords = np.array([kalman_xyz])
+        coords = np.vstack([kalman_xyz, wc_xyz])
+        colors = ['r', 'b']
+        update_3dplot(np.vstack(coords), colors)
     
     #Plot sensor localizations and kalman estimation - 3 points with differnt colors
     #points = np.vstack([wc_xyz, simsens_xyz, kalman_xyz])
