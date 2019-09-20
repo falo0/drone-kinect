@@ -6,8 +6,11 @@ from pyparrot.Minidrone import Mambo
 from bluetooth import *
 
 
-def init_controller(addr):
-	mamboAddr = "D0:3A:58:76:E6:22"
+def init_controller(addr=None):
+	if addr is None:
+		mamboAddr = "D0:3A:58:76:E6:22"
+	else:
+		mamboAddr = addr
 	mambo = Mambo(mamboAddr, use_wifi=False)
 
 	print("trying to connect")
