@@ -100,7 +100,8 @@ R_wc = np.array([[0.05**2, 0., 0.],
 R_kc = np.array([[0.06**2, 0., 0.],
               [0., 0.6**2, 0.],
               [0., 0., 0.06**2]])
-R_kd = np.array([0.08**2]) 
+R_kd = np.array([0.08**2])
+R_sim = np.array([0.08**2]) 
 
 # Steady point linear kalman update
 def kalman_update_steady(z_k):
@@ -128,8 +129,8 @@ def kalman_update_steady(z_k):
     
     return(x_k_posterior) 
     
-# constant velocity linear kalman update
-def kalman_update_velocity(z_k):
+# Steady point linear kalman update that supports multiple sensor input
+def kalman_update_steady_multiple(z_k, H, R):
     
     global x_prev_posterior
     global P_prev_posterior
@@ -140,11 +141,12 @@ def kalman_update_velocity(z_k):
     
     
     ### MEASURMENT UPDATE ###
-    K_k = np.matmul(P_k_prior, np.linalg.inv(P_k_prior + R))
+    K_k = np.matmul(np.matmul(P_k_prior, H.transpose()), np.linalg.inv(H @ P_k_prior @ H.transpose() + R))
+    print("Kalman Gain:")
     print(K_k)
     
-    x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - x_k_prior))
-    P_k_posterior = np.matmul((np.identity(3) - K_k), P_k_prior)
+    x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - np.matmul(H, x_k_prior)))
+    P_k_posterior = np.matmul((np.identity(3) - np.matmul(K_k, H)), P_k_prior)
     print(P_k_posterior)
     
     # The current _k becomes _prev for the next time step, therefore
@@ -152,7 +154,14 @@ def kalman_update_velocity(z_k):
     x_prev_posterior = x_k_posterior
     P_prev_posterior = P_k_posterior
     
-    return(x_k_posterior)  
+    print("kalman estimatoin:")
+    print(x_k_posterior)
+    
+    return(x_k_posterior) 
+    
+# constant velocity linear kalman update
+def kalman_update_velocity(z_k):
+   return 42
 
 #kalman_estimation expects a list of listes of localizations and identifiers of different sensors
 # e.g. update from kinect cam and kinect depth sensor:
@@ -172,6 +181,8 @@ kc_xyz_prev = []
 kc_t = None
 kd_z_prev = []
 kd_t = None
+sim_z_prev = []
+sim_t = None
 
 def kalman_estimation(sensor_readings, reading_times, sensor_names):
     
@@ -197,8 +208,10 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names):
     
     
     # Create measurement vector z_k
+    #print(sensor_readings)
     z_k = np.concatenate(sensor_readings)
     l = len(z_k)
+    print(z_k)
     
     # simple list of the covariance matrices of all sensors
     R_list = []
@@ -231,20 +244,54 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names):
             R_list.append(R_kd)
             # define the rows in the H matrix that correspond to the given sensor
             H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+        elif (sensor_names[i] == 'sim'):
+            # store measurement for later velocity calculation
+            sim_z_prev = sensor_readings[i]
+            sim_t_prev = reading_times[i]
+            # obtain the sensor's covariance matrix
+            R_list.append(R_sim)
+            # define the rows in the H matrix that correspond to the given sensor
+            H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+        else:
+            print("undefined keyword used in sensor_names in kalman_estimation()")
             
     #Convert H_list to the real measurement matrix H
-    H_comb = np.concatenate(H_list)
-    
+    #print(H_list)
+    H_comb = np.vstack(H_list)
+    print("H")
+    print(H_comb)
     #Convert R_list to the real Cov-matrix of all combined Sensors
+    # Not generalized example with R_wc and R_sim
+    R_comb = np.zeros((4, 4), float)
+    R_comb[0:3, 0:3] = R_wc
+    R_comb[3:4, 3:4] = R_sim
+    R_list = [R_wc, R_sim]
+    
     # Initialize combined sensor covariance matrix
     R_comb = np.zeros((l, l), float)
     
+    # Fill it with the covariance matrices of each sensor
+    last_element = 0
+    for i in range(sensor_num):
+        own_length = len(R_list[i])
+        minidx = last_element
+        maxidx = last_element + own_length
+        R_comb[minidx:maxidx, minidx:maxidx] = R_list[i]
+        last_element += own_length
     
+    print(R_comb)
     
-    print(z_k)
-    kalman_xyz = kalman_update_steady(z_k)
+    #print(z_k)
+    #kalman_xyz = kalman_update_steady(z_k)
+    kalman_xyz = kalman_update_steady_multiple(z_k, H_comb, R_comb)
     print(kalman_xyz)
     return kalman_xyz
+    
+
+
+
+
+
     
 #    if measurements[0][0] is not None:
 #        # Measurement vector z_k
@@ -308,7 +355,7 @@ if not plot2D:
     axes.set_ylim([0, 7])
     axes.set_zlim([-0.3,0.3])
     #scat = ax.scatter([], [], [], c='b', marker='o')   
-    scat = ax.scatter([], [], [], c=['r', 'b'], marker='o')         
+    scat = ax.scatter([], [], [], c=['r', 'b', 'g'], marker='o')         
     def update_3dplot(coords, colors):
         #if coords is not None:
         if coords.dtype is np.dtype('float64'): #andernfalls kann es dtype('O') haben und nur None enthalten
@@ -395,31 +442,40 @@ while True:
     #measurements = [[wc_xyzt, 'wc']]
     #kalman_xyz = kalman_estimation(measurements)
     
-    kalman_xyz = kalman_estimation([wc_xyz], [wc_t], ['wc'])
+    #kalman_xyz = kalman_estimation([wc_xyz], [wc_t], ['wc'])
 
+    
     
     #For testing multiple sensor inputs
     #Simulating another sensor by transforming wc_xyzt
-    #if wc_xyz is not None:
-    #    simsens_xyz = 1.2 * wc_xyz
-    #    simsens_xyzt = np.append(simsens_xyz, wc_xyzt[-3])
-    #else:
-    #    simsens_xyz = None
-    #    simsens_xyzt = None
-    #
-    #kalman_xyz = kalman_estimation([wc_xyzt, simsens_xyzt])
+    
+    if wc_xyz is not None:
+        sim_z = 1.2 * wc_xyz[2]
+        sim_t = wc_t
+        #simsens_xyzt = np.append(simsens_xyz, wc_xyzt[-3])
+    else:
+        sim_z = None
+        #simsens_xyzt = None
+    kalman_xyz = kalman_estimation([wc_xyz, np.array([sim_z])], [wc_t, sim_t], ['wc', 'sim'])
 
     
 
     ## UPDATE THE PLOT ##
     # Just plot the Kalman estimation:
-    if plot2D:
-        update_2dplot(kalman_xyz)
-    else:
-        #coords = np.array([kalman_xyz])
-        coords = np.vstack([kalman_xyz, wc_xyz])
-        colors = ['r', 'b']
-        update_3dplot(np.vstack(coords), colors)
+    if wc_xyz is not None:
+        if plot2D:
+            update_2dplot(kalman_xyz)
+        else:
+            #coords = np.array([kalman_xyz])
+            print("Kalman result")
+            print(kalman_xyz)
+            print(wc_xyz)
+            sim_xyz = np.array([0, 0, sim_z])
+            
+            coords = np.vstack([kalman_xyz, wc_xyz, sim_xyz])
+            print(coords)
+            colors = ['r', 'b', 'g']
+            update_3dplot(np.vstack(coords), colors)
     
     #Plot sensor localizations and kalman estimation - 3 points with differnt colors
     #points = np.vstack([wc_xyz, simsens_xyz, kalman_xyz])
