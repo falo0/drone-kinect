@@ -6,7 +6,7 @@ from pyparrot.Minidrone import Mambo
 from bluetooth import *
 
 
-def init_controller():
+def init_controller(addr):
 	mamboAddr = "D0:3A:58:76:E6:22"
 	mambo = Mambo(mamboAddr, use_wifi=False)
 
@@ -90,13 +90,13 @@ def list_devices():
 		print("still..")
 		nearby_devices = discover_devices(duration=5, lookup_names=True)
 		print("found %d devices" % len(nearby_devices))
-		for name, addr in nearby_devices:
-			print(" %s - %s" % (addr, name))
-			# all_devices.append(tuple([addr, name]))
-			if "Mambo" in addr:
+		for addr, name in nearby_devices:
+			print(" %s - %s" % (name, addr))
+			# all_devices.append(tuple([name, addr]))
+			if "Mambo" in name:
 				print("Mambo found")
 				mambo_found = True
-				device = (addr, name)
+				device = (name, addr)
 				break
 	return device
 
