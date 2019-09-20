@@ -66,14 +66,15 @@ def init_controller():
 				else:
 					print("activate cam feed")
 					sending = True
-			print("testing battery:")
-			if mambo.sensors.battery != battery:
-				battery = mambo.sensors.battery
-				if battery < 7:
-					print("landing because battery is low :)", battery)
-					mambo.safe_land(1)
-					break
-				print("battery:", battery)
+			else:
+				print("testing battery:")
+				if mambo.sensors.battery != battery:
+					battery = mambo.sensors.battery
+					if battery < 7:
+						print("landing because battery is low :)", battery)
+						mambo.safe_land(1)
+						break
+					print("battery:", battery)
 
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, orig_settings)
 		print("disconnect")
@@ -81,12 +82,29 @@ def init_controller():
 
 
 def list_devices():
-	nearby_devices = discover_devices(lookup_names=True)
+	print("searching for devices..")
+	# all_devices = []
+	device = None
+	mambo_found = False
+	while not mambo_found:
+		print("still..")
+		nearby_devices = discover_devices(duration=5, lookup_names=True)
+		print("found %d devices" % len(nearby_devices))
+		for name, addr in nearby_devices:
+			print(" %s - %s" % (addr, name))
+			# all_devices.append(tuple([addr, name]))
+			if "Mambo" in addr:
+				print("Mambo found")
+				mambo_found = True
+				device = (addr, name)
+				break
+	return device
 
-	print("found %d devices" % len(nearby_devices))
+	# print("found %d devices" % len(nearby_devices))
+	# print("devices:", nearby_devices)
 
-	for name, addr in nearby_devices:
-		print(" %s - %s" % (addr, name))
+	# for name, addr in nearby_devices:
+	# 	print(" %s - %s" % (addr, name))
 
 
 """
