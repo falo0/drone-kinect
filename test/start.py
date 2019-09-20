@@ -92,10 +92,18 @@ P_prev_posterior = P0
 # std of 0.5 meters means a var of sqrt(0.5)
 R = np.array([[0.05**2, 0., 0.],
               [0., 0.5**2, 0.],
-              [0., 0., 0.05**2]])  
+              [0., 0., 0.05**2]]) #should be deprecated later
+    
+R_wc = np.array([[0.05**2, 0., 0.],
+              [0., 0.5**2, 0.],
+              [0., 0., 0.05**2]]) 
+R_kc = np.array([[0.06**2, 0., 0.],
+              [0., 0.6**2, 0.],
+              [0., 0., 0.06**2]])
+R_kd = np.array([0.08**2]) 
 
-# simple kalman update
-def kalman_update(z_k):
+# Steady point linear kalman update
+def kalman_update_steady(z_k):
     
     global x_prev_posterior
     global P_prev_posterior
@@ -118,20 +126,152 @@ def kalman_update(z_k):
     x_prev_posterior = x_k_posterior
     P_prev_posterior = P_k_posterior
     
-    return(x_k_posterior)   
+    return(x_k_posterior) 
+    
+# constant velocity linear kalman update
+def kalman_update_velocity(z_k):
+    
+    global x_prev_posterior
+    global P_prev_posterior
+    
+    ### TIME UPDATE ###
+    x_k_prior = np.matmul(A, x_prev_posterior)
+    P_k_prior = P_prev_posterior + Q
+    
+    
+    ### MEASURMENT UPDATE ###
+    K_k = np.matmul(P_k_prior, np.linalg.inv(P_k_prior + R))
+    print(K_k)
+    
+    x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - x_k_prior))
+    P_k_posterior = np.matmul((np.identity(3) - K_k), P_k_prior)
+    print(P_k_posterior)
+    
+    # The current _k becomes _prev for the next time step, therefore
+    # update the global variables
+    x_prev_posterior = x_k_posterior
+    P_prev_posterior = P_k_posterior
+    
+    return(x_k_posterior)  
 
-#kalman_estimation expects a list of xyzt localizations of different sensors
-def kalman_estimation(xyzt_list):
-    if xyzt_list[0] is not None:
-        # Measurement vector z_k
-        # For now it just takes the xyz of the first xyzt vector that it was given.
-        z_k = xyzt_list[0][:3]
-        print(z_k)
-        kalman_xyz = kalman_update(z_k)
-        print(kalman_xyz)
-        return kalman_xyz
-    else:
+#kalman_estimation expects a list of listes of localizations and identifiers of different sensors
+# e.g. update from kinect cam and kinect depth sensor:
+# e.g. sensor_readings, sensor_names = [kc_xyzt, kd_zt], ['kc', 'kd']
+# old: [[kc_xyzt, 'kc'], ['kc, 'kd']]
+# For testing:
+sensor_readings = [np.array([0.5, 0.5, 0.5]), np.array([0.4])]
+reading_times = [123456, 123456]
+sensor_names = ['kc', 'kd']
+
+
+# Storing values of previous invocations of kalman_estmiation, necessary to
+# calculate differences dx, dy, dz, dt and therefore velocities vx, vy, vz
+wc_xyz_prev = []
+wc_t_prev = None
+kc_xyz_prev = []
+kc_t = None
+kd_z_prev = []
+kd_t = None
+
+def kalman_estimation(sensor_readings, reading_times, sensor_names):
+    
+    sensor_num = len(sensor_readings)
+    state_num = 3 #for xyz, if we include velocity, it's 6
+    if(sensor_num == 0):
+        print("kalman_estimation() must not have empty lists as parameters")
         return None
+    if(not (sensor_num == len(reading_times) and len(reading_times) == len(sensor_names))):
+        print("all function parameters of kalman_estimation() must be lists of same length")
+        return None
+    if any(elem is None for elem in sensor_readings):
+        #e.g. an aruco code couldn't be tracked
+        print("filter only updates if all provided sensor values are not None")
+        return None
+    #mylist = [np.array([2,1]), None]
+    
+        
+    #global measurements_prev
+    #if(len(measurements_prev) == 0):
+        # initialize measuerements_prev
+    #    measurements_prev = measurements
+    
+    
+    # Create measurement vector z_k
+    z_k = np.concatenate(sensor_readings)
+    l = len(z_k)
+    
+    # simple list of the covariance matrices of all sensors
+    R_list = []
+    
+    # simple list of submatrices that make up the H matrix
+    H_list = []
+    for i in range(sensor_num):
+            
+        if(sensor_names[i] == 'wc'):
+            # store measurement for later velocity calculation
+            wc_xyz_prev = sensor_readings[i]
+            wc_t_prev = reading_times[i]
+            # obtain the sensor's covariance matrix
+            R_list.append(R_wc)
+            # define the rows in the H matrix that correspond to the given sensor
+            H_list.append(np.identity(3)) #only if we ignore velocity
+        elif (sensor_names[i] == 'kc'):
+            # store measurement for later velocity calculation
+            kc_xyz_prev = sensor_readings[i]
+            kc_t_prev = reading_times[i]
+            # obtain the sensor's covariance matrix
+            R_list.append(R_kc)
+            # define the rows in the H matrix that correspond to the given sensor
+            H_list.append(np.identity(3)) #only if we ignore velocity
+        elif (sensor_names[i] == 'kd'):
+            # store measurement for later velocity calculation
+            kd_z_prev = sensor_readings[i]
+            kd_t_prev = reading_times[i]
+            # obtain the sensor's covariance matrix
+            R_list.append(R_kd)
+            # define the rows in the H matrix that correspond to the given sensor
+            H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+            
+    #Convert H_list to the real measurement matrix H
+    H_comb = np.concatenate(H_list)
+    
+    #Convert R_list to the real Cov-matrix of all combined Sensors
+    # Initialize combined sensor covariance matrix
+    R_comb = np.zeros((l, l), float)
+    
+    
+    
+    print(z_k)
+    kalman_xyz = kalman_update_steady(z_k)
+    print(kalman_xyz)
+    return kalman_xyz
+    
+#    if measurements[0][0] is not None:
+#        # Measurement vector z_k
+#        # For now it just takes the xyz of the first xyzt vector that it was given.
+#        z_k = measurements[0][0][:3]
+#        t_k = measurements[0][0][3]
+#        print(z_k)
+#        # extend the measurement vector by velocities
+#        meas_diff = measurements - measurements_prev
+#        print("maes_diff")
+#        print(meas_diff)
+#        
+#        kalman_xyz = kalman_update_steady(z_k)
+#        print(kalman_xyz)
+#        
+#        #------------------
+#        ### INCLUDING VELOCITY INTO STATE- AND MEASUREMENT-VECTOR ###
+#        # measurements_prev = measurements
+#        kalman_update_velocity(z_k)
+#        
+#        
+#        
+#        #------------------
+#        
+#        return kalman_xyz
+#    else:
+#        return None
 
 
 ## SET UP PLOT ##
@@ -249,18 +389,25 @@ while True:
     
     #Just using wc_xyzt, which is already enough for a Kalman filter, as it
     #can fuse estimations from past values and current camera observations
-    kalman_xyz = kalman_estimation([wc_xyzt])
+    # kalman_xyz expects a specific data input,
+    # e.g. measurements = [[kc_xyzt, 'kc'], [kd_zt, 'kd']]
+
+    #measurements = [[wc_xyzt, 'wc']]
+    #kalman_xyz = kalman_estimation(measurements)
+    
+    kalman_xyz = kalman_estimation([wc_xyz], [wc_t], ['wc'])
+
     
     #For testing multiple sensor inputs
     #Simulating another sensor by transforming wc_xyzt
-    if wc_xyz is not None:
-        simsens_xyz = 1.2 * wc_xyz
-        simsens_xyzt = np.append(simsens_xyz, wc_xyzt[-3])
-    else:
-        simsens_xyz = None
-        simsens_xyzt = None
-    
-    kalman_xyz = kalman_estimation([wc_xyzt, simsens_xyzt])
+    #if wc_xyz is not None:
+    #    simsens_xyz = 1.2 * wc_xyz
+    #    simsens_xyzt = np.append(simsens_xyz, wc_xyzt[-3])
+    #else:
+    #    simsens_xyz = None
+    #    simsens_xyzt = None
+    #
+    #kalman_xyz = kalman_estimation([wc_xyzt, simsens_xyzt])
 
     
 
