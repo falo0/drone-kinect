@@ -58,7 +58,7 @@ x_prev_posterior_vel = np.zeros(6)
 # state transition matrix A. Here, the simple assumption is that the location of the
 # point doesn't change.
 A = np.identity(3)
-A_vel = np.identity(6)
+# A_vel is updated every time with the delta t's, since we don't assume constant delta t's
 
 # define the process covariance Q. That's the covariance of the error of the
 # pure state transition model. Our state transition model is expected to have
@@ -188,13 +188,13 @@ def kalman_update_steady_multiple(z_k, H, R):
     return(x_k_posterior) 
     
 # constant velocity linear kalman update
-def kalman_update_velocity(z_k, H, R):
+def kalman_update_velocity(z_k, H, R, A):
     global x_prev_posterior_vel
     global P_prev_posterior_vel
     
     ### TIME UPDATE ###
-    x_k_prior = np.matmul(A_vel, x_prev_posterior_vel)
-    P_k_prior = P_prev_posterior_vel + Q_vel
+    x_k_prior = np.matmul(A, x_prev_posterior_vel)
+    P_k_prior = A @ P_prev_posterior_vel @ A.transpose() + Q_vel
     
     
     ### MEASURMENT UPDATE ###
@@ -325,7 +325,7 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'st
         global wc_xyz_prev, wc_t_prev, kc_xyz_prev, kc_t_prev, kd_z_prev, kd_t_prev, sim_z_prev, sim_t_prev
         
         
-        # initiate measurement vector e.g. z_k = np.array([kc_x, kc_y, kc_z, kc_vx, kc_vy, kc_vz, kd_z, kd_vz]) 
+        # initialize measurement vector e.g. z_k = np.array([kc_x, kc_y, kc_z, kc_vx, kc_vy, kc_vz, kd_z, kd_vz]) 
         z_k_list = []
         
         # simple list of the covariance matrices of all sensors
@@ -333,6 +333,9 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'st
         
         # simple list of submatrices that make up the H matrix
         H_list = []
+        
+        # initialize A
+        A = np.identity(6)
         
         for i in range(sensor_num):
                 
@@ -346,6 +349,10 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'st
                 # fill measurement vector with measured coordinates and velocity
                 z_k_list.append(sensor_readings[i])
                 z_k_list.append(wc_vel)
+                
+                # write delta t's in A
+                A[0:3, 3:6] = np.identity(3) * t_delta
+                # I don't know so far how to deal with additional t_delta from other sensors
                 
                 # store measurement for later velocity calculation
                 wc_xyz_prev = sensor_readings[i]
@@ -385,7 +392,10 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'st
                 H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
             else:
                 print("undefined keyword used in sensor_names in kalman_estimation()")
-                
+        
+        print("A")
+        print(A)
+        
         #Convert H_list to the real measurement matrix H
         #print(H_list)
         H_comb = np.vstack(H_list)
@@ -420,9 +430,11 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'st
         
         print(R_comb)
         
+        
+        
         #print(z_k)
         #kalman_xyz = kalman_update_steady(z_k)
-        kalman_xyzvxvyvz = kalman_update_velocity(z_k, H_comb, R_comb)
+        kalman_xyzvxvyvz = kalman_update_velocity(z_k, H_comb, R_comb, A)
         kalman_xyz = kalman_xyzvxvyvz[:3] #the velocities stay intern
         print(kalman_xyz)
         return kalman_xyz
@@ -592,7 +604,7 @@ while True:
     else:
         sim_z = None
         #simsens_xyzt = None
-    kalman_xyz = kalman_estimation([wc_xyz, np.array([sim_z])], [wc_t, sim_t], ['wc', 'sim'])
+    #kalman_xyz = kalman_estimation([wc_xyz, np.array([sim_z])], [wc_t, sim_t], ['wc', 'sim'])
 
     # Tests of velocity kalman of just wc_xyz for now:
     kalman_xyz = kalman_estimation([wc_xyz], [wc_t], ['wc'], method = 'velocity')
