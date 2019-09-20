@@ -54,9 +54,12 @@ def localize_imu(frame):
 # initialization of the state vector x. It contains the the 3 coordinates of a point
 x0 = np.array([0,0,0])
 x_prev_posterior = x0
+x_prev_posterior_vel = np.zeros(6)
 # state transition matrix A. Here, the simple assumption is that the location of the
 # point doesn't change.
 A = np.identity(3)
+A_vel = np.identity(6)
+
 # define the process covariance Q. That's the covariance of the error of the
 # pure state transition model. Our state transition model is expected to have
 # a relatively high error variance <=> a lot of noise, since it is often not true
@@ -64,6 +67,12 @@ A = np.identity(3)
 Q = np.array([[0.1**2, 0., 0.],
               [0., 1**2, 0.],
               [0., 0., 0.1**2]])
+Q_vel = np.zeros((6, 6), float)
+Q_vel[0:3, 0:3] = Q
+Q_vel[3:6, 3:6] = np.array([[0.05**2, 0., 0.],
+                            [0., 0.05**2, 0.],
+                            [0., 0., 0.05**2]])
+
 #This Q lead to the kalman gain sabilizing at I*0.83. A lower kalman gain
 #could be better due to the bad aruco localization. Parameter tuning:
 Q = Q*0.3
@@ -78,6 +87,7 @@ P0 = np.array([[0.1**2, 0., 0.],
               [0., 1**2, 0.],
               [0., 0., 0.1**2]])/2
 P_prev_posterior = P0
+P_prev_posterior_vel = np.identity(6) * 0.01
 
 # R is the covariance matrix of the measurement error x_k_true - z_k
 # First, have a look of xlim, ylim, zlim of the plot furhter below
@@ -93,7 +103,8 @@ P_prev_posterior = P0
 R = np.array([[0.05**2, 0., 0.],
               [0., 0.5**2, 0.],
               [0., 0., 0.05**2]]) #should be deprecated later
-    
+
+# steady point sensors
 R_wc = np.array([[0.05**2, 0., 0.],
               [0., 0.5**2, 0.],
               [0., 0., 0.05**2]]) 
@@ -103,6 +114,23 @@ R_kc = np.array([[0.06**2, 0., 0.],
 R_kd = np.array([0.08**2])
 R_sim = np.array([0.08**2]) 
 
+# point sensors extended by indirect velocity measurement
+R_wc_vel = np.zeros((6, 6), float)
+R_wc_vel[0:3, 0:3] = R_wc
+R_wc_vel[3:6, 3:6] = np.array([[0.005**2, 0., 0.],
+                            [0., 0.005**2, 0.],
+                            [0., 0., 0.005**2]])
+
+R_kc_vel = np.zeros((6, 6), float)
+R_kc_vel[0:3, 0:3] = R_kc
+R_kc_vel[3:6, 3:6] = np.array([[0.005**2, 0., 0.],
+                            [0., 0.005**2, 0.],
+                            [0., 0., 0.005**2]])
+
+R_kd_vel = np.diag([R_kd[0], 0.005**2])
+
+R_sim_vel = np.diag([R_sim[0], 0.005**2])
+    
 # Steady point linear kalman update
 def kalman_update_steady(z_k):
     
@@ -160,8 +188,33 @@ def kalman_update_steady_multiple(z_k, H, R):
     return(x_k_posterior) 
     
 # constant velocity linear kalman update
-def kalman_update_velocity(z_k):
-   return 42
+def kalman_update_velocity(z_k, H, R):
+    global x_prev_posterior_vel
+    global P_prev_posterior_vel
+    
+    ### TIME UPDATE ###
+    x_k_prior = np.matmul(A_vel, x_prev_posterior_vel)
+    P_k_prior = P_prev_posterior_vel + Q_vel
+    
+    
+    ### MEASURMENT UPDATE ###
+    K_k = np.matmul(np.matmul(P_k_prior, H.transpose()), np.linalg.inv(H @ P_k_prior @ H.transpose() + R))
+    print("Kalman Gain:")
+    print(K_k)
+    
+    x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - np.matmul(H, x_k_prior)))
+    P_k_posterior = np.matmul((np.identity(6) - np.matmul(K_k, H)), P_k_prior)
+    print(P_k_posterior)
+    
+    # The current _k becomes _prev for the next time step, therefore
+    # update the global variables
+    x_prev_posterior_vel = x_k_posterior
+    P_prev_posterior_vel = P_k_posterior
+    
+    print("kalman estimatoin:")
+    print(x_k_posterior)
+    
+    return(x_k_posterior)
 
 #kalman_estimation expects a list of listes of localizations and identifiers of different sensors
 # e.g. update from kinect cam and kinect depth sensor:
@@ -175,19 +228,13 @@ sensor_names = ['kc', 'kd']
 
 # Storing values of previous invocations of kalman_estmiation, necessary to
 # calculate differences dx, dy, dz, dt and therefore velocities vx, vy, vz
-wc_xyz_prev = []
-wc_t_prev = None
-kc_xyz_prev = []
-kc_t = None
-kd_z_prev = []
-kd_t = None
-sim_z_prev = []
-sim_t = None
+wc_xyz_prev = kc_xyz_prev = np.array([0,0,0])
+kd_z_prev = sim_z_prev = np.array([0])
+wc_t_prev = kc_t_prev = kd_t_prev = sim_t_prev = time.time()
 
-def kalman_estimation(sensor_readings, reading_times, sensor_names):
+def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'steady'):
     
     sensor_num = len(sensor_readings)
-    state_num = 3 #for xyz, if we include velocity, it's 6
     if(sensor_num == 0):
         print("kalman_estimation() must not have empty lists as parameters")
         return None
@@ -200,98 +247,187 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names):
         return None
     #mylist = [np.array([2,1]), None]
     
+    
+    if (method == 'steady'):
+        # Create measurement vector z_k
+        #print(sensor_readings)
+        z_k = np.concatenate(sensor_readings)
+        l = len(z_k)
+        print(z_k)
         
-    #global measurements_prev
+        # simple list of the covariance matrices of all sensors
+        R_list = []
+        
+        # simple list of submatrices that make up the H matrix
+        H_list = []
+        for i in range(sensor_num):
+                
+            if(sensor_names[i] == 'wc'):
+                # obtain the sensor's covariance matrix
+                R_list.append(R_wc)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.identity(3)) #only if we ignore velocity
+            elif (sensor_names[i] == 'kc'):
+                # obtain the sensor's covariance matrix
+                R_list.append(R_kc)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.identity(3)) #only if we ignore velocity
+            elif (sensor_names[i] == 'kd'):
+                # obtain the sensor's covariance matrix
+                R_list.append(R_kd)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+            elif (sensor_names[i] == 'sim'):
+                # obtain the sensor's covariance matrix
+                R_list.append(R_sim)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+            else:
+                print("undefined keyword used in sensor_names in kalman_estimation()")
+                
+        #Convert H_list to the real measurement matrix H
+        #print(H_list)
+        H_comb = np.vstack(H_list)
+        print("H")
+        print(H_comb)
+        #Convert R_list to the real Cov-matrix of all combined Sensors
+        # Not generalized example with R_wc and R_sim
+        #R_comb = np.zeros((4, 4), float)
+        #R_comb[0:3, 0:3] = R_wc
+        #R_comb[3:4, 3:4] = R_sim
+        #R_list = [R_wc, R_sim]
+        
+        # Initialize combined sensor covariance matrix
+        R_comb = np.zeros((l, l), float)
+        
+        # Fill it with the covariance matrices of each sensor
+        last_element = 0
+        for i in range(sensor_num):
+            own_length = len(R_list[i])
+            minidx = last_element
+            maxidx = last_element + own_length
+            R_comb[minidx:maxidx, minidx:maxidx] = R_list[i]
+            last_element += own_length
+        
+        print(R_comb)
+        
+        #print(z_k)
+        #kalman_xyz = kalman_update_steady(z_k)
+        kalman_xyz = kalman_update_steady_multiple(z_k, H_comb, R_comb)
+        print(kalman_xyz)
+        return kalman_xyz
+    elif (method == 'velocity'):
+        
+         #global measurements_prev
     #if(len(measurements_prev) == 0):
         # initialize measuerements_prev
     #    measurements_prev = measurements
-    
-    
-    # Create measurement vector z_k
-    #print(sensor_readings)
-    z_k = np.concatenate(sensor_readings)
-    l = len(z_k)
-    print(z_k)
-    
-    # simple list of the covariance matrices of all sensors
-    R_list = []
-    
-    # simple list of submatrices that make up the H matrix
-    H_list = []
-    for i in range(sensor_num):
-            
-        if(sensor_names[i] == 'wc'):
-            # store measurement for later velocity calculation
-            wc_xyz_prev = sensor_readings[i]
-            wc_t_prev = reading_times[i]
-            # obtain the sensor's covariance matrix
-            R_list.append(R_wc)
-            # define the rows in the H matrix that correspond to the given sensor
-            H_list.append(np.identity(3)) #only if we ignore velocity
-        elif (sensor_names[i] == 'kc'):
-            # store measurement for later velocity calculation
-            kc_xyz_prev = sensor_readings[i]
-            kc_t_prev = reading_times[i]
-            # obtain the sensor's covariance matrix
-            R_list.append(R_kc)
-            # define the rows in the H matrix that correspond to the given sensor
-            H_list.append(np.identity(3)) #only if we ignore velocity
-        elif (sensor_names[i] == 'kd'):
-            # store measurement for later velocity calculation
-            kd_z_prev = sensor_readings[i]
-            kd_t_prev = reading_times[i]
-            # obtain the sensor's covariance matrix
-            R_list.append(R_kd)
-            # define the rows in the H matrix that correspond to the given sensor
-            H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
-        elif (sensor_names[i] == 'sim'):
-            # store measurement for later velocity calculation
-            sim_z_prev = sensor_readings[i]
-            sim_t_prev = reading_times[i]
-            # obtain the sensor's covariance matrix
-            R_list.append(R_sim)
-            # define the rows in the H matrix that correspond to the given sensor
-            H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
-        else:
-            print("undefined keyword used in sensor_names in kalman_estimation()")
-            
-    #Convert H_list to the real measurement matrix H
-    #print(H_list)
-    H_comb = np.vstack(H_list)
-    print("H")
-    print(H_comb)
-    #Convert R_list to the real Cov-matrix of all combined Sensors
-    # Not generalized example with R_wc and R_sim
-    R_comb = np.zeros((4, 4), float)
-    R_comb[0:3, 0:3] = R_wc
-    R_comb[3:4, 3:4] = R_sim
-    R_list = [R_wc, R_sim]
-    
-    # Initialize combined sensor covariance matrix
-    R_comb = np.zeros((l, l), float)
-    
-    # Fill it with the covariance matrices of each sensor
-    last_element = 0
-    for i in range(sensor_num):
-        own_length = len(R_list[i])
-        minidx = last_element
-        maxidx = last_element + own_length
-        R_comb[minidx:maxidx, minidx:maxidx] = R_list[i]
-        last_element += own_length
-    
-    print(R_comb)
-    
-    #print(z_k)
-    #kalman_xyz = kalman_update_steady(z_k)
-    kalman_xyz = kalman_update_steady_multiple(z_k, H_comb, R_comb)
-    print(kalman_xyz)
-    return kalman_xyz
-    
+        global wc_xyz_prev, wc_t_prev, kc_xyz_prev, kc_t_prev, kd_z_prev, kd_t_prev, sim_z_prev, sim_t_prev
+        
+        
+        # initiate measurement vector e.g. z_k = np.array([kc_x, kc_y, kc_z, kc_vx, kc_vy, kc_vz, kd_z, kd_vz]) 
+        z_k_list = []
+        
+        # simple list of the covariance matrices of all sensors
+        R_list = []
+        
+        # simple list of submatrices that make up the H matrix
+        H_list = []
+        
+        for i in range(sensor_num):
+                
+            if(sensor_names[i] == 'wc'):
+                # calculate velocity
+                xyz_delta = sensor_readings[i] - wc_xyz_prev
+                t_delta = reading_times[i] - wc_t_prev
+                
+                wc_vel = xyz_delta/t_delta
+                
+                # fill measurement vector with measured coordinates and velocity
+                z_k_list.append(sensor_readings[i])
+                z_k_list.append(wc_vel)
+                
+                # store measurement for later velocity calculation
+                wc_xyz_prev = sensor_readings[i]
+                wc_t_prev = reading_times[i]
+                
+                # obtain the sensor's covariance matrix
+                R_list.append(R_wc_vel)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.identity(6))
+                
+       ####### DER CASE 'wc' SOLLTE AN VELOCITY ANGEPASST SEIN, ALLES ANDERE NOCH NICHT, AB HIER WEITER MACHEN!         
+       ###########################
+         
+            elif (sensor_names[i] == 'kc'):
+                # store measurement for later velocity calculation
+                kc_xyz_prev = sensor_readings[i]
+                kc_t_prev = reading_times[i]
+                # obtain the sensor's covariance matrix
+                R_list.append(R_kc)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.identity(3)) #only if we ignore velocity
+            elif (sensor_names[i] == 'kd'):
+                # store measurement for later velocity calculation
+                kd_z_prev = sensor_readings[i]
+                kd_t_prev = reading_times[i]
+                # obtain the sensor's covariance matrix
+                R_list.append(R_kd)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+            elif (sensor_names[i] == 'sim'):
+                # store measurement for later velocity calculation
+                sim_z_prev = sensor_readings[i]
+                sim_t_prev = reading_times[i]
+                # obtain the sensor's covariance matrix
+                R_list.append(R_sim)
+                # define the rows in the H matrix that correspond to the given sensor
+                H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+            else:
+                print("undefined keyword used in sensor_names in kalman_estimation()")
+                
+        #Convert H_list to the real measurement matrix H
+        #print(H_list)
+        H_comb = np.vstack(H_list)
+        print("H")
+        print(H_comb)
+        #Convert R_list to the real Cov-matrix of all combined Sensors
+        # Not generalized example with R_wc and R_sim
+        #R_comb = np.zeros((4, 4), float)
+        #R_comb[0:3, 0:3] = R_wc
+        #R_comb[3:4, 3:4] = R_sim
+        #R_list = [R_wc, R_sim]
+        
+        
+        #Convert z_k_list of vectors to the single z_k vector
+        
+        z_k = np.concatenate(z_k_list)
+        l = len(z_k)
+        print("zk")
+        print(z_k)
+        
+        # Initialize combined sensor covariance matrix
+        R_comb = np.zeros((l, l), float)
+        
+        # Fill it with the covariance matrices of each sensor
+        last_element = 0
+        for i in range(sensor_num):
+            own_length = len(R_list[i])
+            minidx = last_element
+            maxidx = last_element + own_length
+            R_comb[minidx:maxidx, minidx:maxidx] = R_list[i]
+            last_element += own_length
+        
+        print(R_comb)
+        
+        #print(z_k)
+        #kalman_xyz = kalman_update_steady(z_k)
+        kalman_xyzvxvyvz = kalman_update_velocity(z_k, H_comb, R_comb)
+        kalman_xyz = kalman_xyzvxvyvz[:3] #the velocities stay intern
+        print(kalman_xyz)
+        return kalman_xyz
 
-
-
-
-
+    
     
 #    if measurements[0][0] is not None:
 #        # Measurement vector z_k
@@ -458,7 +594,9 @@ while True:
         #simsens_xyzt = None
     kalman_xyz = kalman_estimation([wc_xyz, np.array([sim_z])], [wc_t, sim_t], ['wc', 'sim'])
 
-    
+    # Tests of velocity kalman of just wc_xyz for now:
+    kalman_xyz = kalman_estimation([wc_xyz], [wc_t], ['wc'], method = 'velocity')
+##### Funktioniert! Als nächstes sim_z auch noch reinfusionieren!     #######
 
     ## UPDATE THE PLOT ##
     # Just plot the Kalman estimation:
