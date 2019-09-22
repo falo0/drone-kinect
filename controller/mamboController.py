@@ -7,6 +7,11 @@ from bluetooth import *
 
 
 def init_controller(addr=None):
+	"""
+	Initiate connection to Mambo via BLE and control it via keyboard (W, A, S, D, Q, E, F)
+	:param addr: MAC address of Mambo to connect to, default: None
+	:return: -
+	"""
 	if addr is None:
 		mamboAddr = "D0:3A:58:76:E6:22"
 	else:
@@ -85,13 +90,19 @@ def init_controller(addr=None):
 
 
 def list_devices():
-	print("searching for devices..")
+	"""
+	Search for available bluetooth devices until a Mambo is found
+	:return: Name and MAC address of found Mambo as tuple or None tuple if interrupted by user
+	"""
 	# all_devices = []
 	device = None
 	mambo_found = False
 	while not mambo_found:
-		print("still..")
-		nearby_devices = discover_devices(duration=5, lookup_names=True)
+		print("searching for devices..")
+		try:
+			nearby_devices = discover_devices(duration=10, lookup_names=True)
+		except:
+			break
 		print("found %d devices" % len(nearby_devices))
 		for addr, name in nearby_devices:
 			print(" %s - %s" % (name, addr))
@@ -101,7 +112,11 @@ def list_devices():
 				mambo_found = True
 				device = (name, addr)
 				break
-	return device
+	if device is not None:
+		return device
+	else:
+		return tuple([None, None])
+
 
 	# print("found %d devices" % len(nearby_devices))
 	# print("devices:", nearby_devices)
