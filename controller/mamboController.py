@@ -1,9 +1,9 @@
 import tty
 import sys
 import termios
-from bluepy import btle
 from pyparrot.Minidrone import Mambo
-from bluetooth import *
+
+import bluetooth
 
 
 def init_controller(addr=None):
@@ -99,10 +99,7 @@ def list_devices():
 	mambo_found = False
 	while not mambo_found:
 		print("searching for devices..")
-		try:
-			nearby_devices = discover_devices(duration=10, lookup_names=True)
-		except:
-			break
+		nearby_devices = bluetooth.discover_devices(duration=10, lookup_names=True)
 		print("found %d devices" % len(nearby_devices))
 		for addr, name in nearby_devices:
 			print(" %s - %s" % (name, addr))
@@ -123,6 +120,10 @@ def list_devices():
 
 	# for name, addr in nearby_devices:
 	# 	print(" %s - %s" % (addr, name))
+
+name, addr = list_devices()
+print('%s, %s'%(name, addr))
+init_controller(addr)
 
 
 """

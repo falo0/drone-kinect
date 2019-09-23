@@ -9,7 +9,6 @@
 
 #include <boost/python.hpp>
 #include "boost/python/numpy.hpp"
-//#include <algorithm> //std::min max
 
 namespace p = boost::python;
 namespace np = boost::python::numpy;
@@ -85,26 +84,13 @@ public:
 
 		// fill input array
 		unsigned char* input_rgb = reinterpret_cast<unsigned char*>(input_rgb_np.get_data());
-		unsigned char* input_ir = reinterpret_cast<unsigned char*>(input_ir_np.get_data());
-		//unsigned char* input_depth = reinterpret_cast<unsigned char*>(input_depth_np.get_data());
+		float* input_ir = reinterpret_cast<float*>(input_ir_np.get_data());
 		float* input_depth = reinterpret_cast<float*>(input_depth_np.get_data());
 		unsigned char* input_registered = reinterpret_cast<unsigned char*>(input_registered_np.get_data());
 
 		memcpy(input_rgb, rgb->data , 1920*1080*4*sizeof(unsigned char));
-		memcpy(input_ir, ir->data , 512*424*4*sizeof(unsigned char));
-		memcpy(input_depth, depth->data , 512*424* 4);
-
-		//min,max distance in mm
-		float depth_min = 500;
-		float depth_max = 1000;
-		for(int i=0;i<512*424; i++){
-			input_depth[i] = (std::max(depth_min, std::min(input_depth[i], depth_max)) - depth_min) / (depth_max-depth_min);
-			if(input_depth[i] == 1.0f){
-				input_depth[i] = 0;
-			}
-		}
-
-		//memcpy(input_registered, registered->data , 512*424*4*sizeof(unsigned char));
+		memcpy(input_ir, ir->data , 512*424*4);
+		memcpy(input_depth, depth->data , 512*424*4);
 		memcpy(input_registered, undistorted->data , 512*424*4*sizeof(unsigned char));
 
 		listener->release(frames);
@@ -118,8 +104,6 @@ public:
 		np::initialize();
 		class_<Kinect>("Kinect")
 			.def("getData", &Kinect::getData);
-		//	.def("destroy", &Kinect::destroy);
-
 	}
 
 

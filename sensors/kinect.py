@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from . import kinect_wrapper
+from libfreenect2 import kinect_wrapper
 import numpy as np
 
 from datetime import datetime

@@ -1,20 +1,34 @@
 import cv2
 import numpy as np
 
-def calc(data, render):
-	
-	# TODO set depth via c++ wrapper and calc final depth based on (0, 1] multiplier of distance diff
 
-	a = np.where(data.depth > 0)
-	if(len(a[0]) == 0):
+def set_range(min_depth_in, max_depth_in):
+	global min_depth
+	global max_depth
+	min_depth = min_depth_in
+	max_depth = max_depth_in
+
+
+def calc(data, render):	
+	global min_depth
+	global max_depth
+
+	in_range = np.where((data.depth > min_depth) & (data.depth < max_depth))
+	if(len(in_range[0]) == 0):
 		return None
 
-	x_mean = int(a[0].mean())
-	y_mean = int(a[1].mean())
+	x_mean = int(in_range[0].mean())
+	y_mean = int(in_range[1].mean())
 
 	if render:
-		i_rgb = cv2.cvtColor(data.depth, cv2.COLOR_GRAY2RGB)
-		cv2.circle(i_rgb, (y_mean, x_mean), 10, (255, 0 , 0), 5)
-		cv2.imshow(__name__, i_rgb)
+		# scale to [0, 1] based on max distance & turn into rgb channels
+		depth_rgb = cv2.cvtColor(data.depth / data.depth.max(), cv2.COLOR_GRAY2RGB)
+		# render relevant in_range pixels blue
+		depth_rgb[in_range] = [255, 0, 0]
+		# draw red circle around mean
+		cv2.circle(depth_rgb, (y_mean, x_mean), 10, (0, 0 , 255), 5)
+
+		cv2.imshow(__name__, depth_rgb)
+
 	return [x_mean, y_mean, data.depth[x_mean, y_mean]]
 
