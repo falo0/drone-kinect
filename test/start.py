@@ -230,7 +230,7 @@ sensor_names = ['kc', 'kd']
 # calculate differences dx, dy, dz, dt and therefore velocities vx, vy, vz
 wc_xyz_prev = kc_xyz_prev = np.array([0,0,0])
 kd_z_prev = sim_z_prev = np.array([0])
-wc_t_prev = kc_t_prev = kd_t_prev = sim_t_prev = time.time()
+wc_t_prev = kc_t_prev = kd_t_prev = sim_t_prev = kup_t_prev = time.time()
 
 def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'steady'):
     
@@ -322,7 +322,7 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'st
     #if(len(measurements_prev) == 0):
         # initialize measuerements_prev
     #    measurements_prev = measurements
-        global wc_xyz_prev, wc_t_prev, kc_xyz_prev, kc_t_prev, kd_z_prev, kd_t_prev, sim_z_prev, sim_t_prev
+        global wc_xyz_prev, wc_t_prev, kc_xyz_prev, kc_t_prev, kd_z_prev, kd_t_prev, sim_z_prev, sim_t_prev, kup_t_prev
         
         
         # initialize measurement vector e.g. z_k = np.array([kc_x, kc_y, kc_z, kc_vx, kc_vy, kc_vz, kd_z, kd_vz]) 
@@ -342,54 +342,141 @@ def kalman_estimation(sensor_readings, reading_times, sensor_names, method = 'st
             if(sensor_names[i] == 'wc'):
                 # calculate velocity
                 xyz_delta = sensor_readings[i] - wc_xyz_prev
-                t_delta = reading_times[i] - wc_t_prev
                 
-                wc_vel = xyz_delta/t_delta
+                # time between measurements of the same sensor (I think it's wrong):
+                wc_delta_t = reading_times[i] - wc_t_prev
+                
+                wc_vel = xyz_delta/wc_delta_t
                 
                 # fill measurement vector with measured coordinates and velocity
                 z_k_list.append(sensor_readings[i])
                 z_k_list.append(wc_vel)
                 
+                
+                # relevant in the state transition matrix A is the time between 
+                # the Kalman updates, not the time between measurements of the
+                # same sensor
+                now = time.time()
+                kalman_delta_t = now - kup_t_prev
+                
                 # write delta t's in A
-                A[0:3, 3:6] = np.identity(3) * t_delta
-                # I don't know so far how to deal with additional t_delta from other sensors
+                A[0:3, 3:6] = np.identity(3) * kalman_delta_t
                 
                 # store measurement for later velocity calculation
                 wc_xyz_prev = sensor_readings[i]
                 wc_t_prev = reading_times[i]
-                
+                kup_t_prev = now
                 # obtain the sensor's covariance matrix
                 R_list.append(R_wc_vel)
                 # define the rows in the H matrix that correspond to the given sensor
                 H_list.append(np.identity(6))
                 
-       ####### DER CASE 'wc' SOLLTE AN VELOCITY ANGEPASST SEIN, ALLES ANDERE NOCH NICHT, AB HIER WEITER MACHEN!         
-       ###########################
          
             elif (sensor_names[i] == 'kc'):
+                # calculate velocity
+                xyz_delta = sensor_readings[i] - kc_xyz_prev
+                
+                # time between measurements of the same sensor (I think it's wrong):
+                kc_delta_t = reading_times[i] - kc_t_prev
+                
+                kc_vel = xyz_delta/kc_delta_t
+                
+                # fill measurement vector with measured coordinates and velocity
+                z_k_list.append(sensor_readings[i])
+                z_k_list.append(kc_vel)
+                
+                
+                # relevant in the state transition matrix A is the time between 
+                # the Kalman updates, not the time between measurements of the
+                # same sensor
+                now = time.time()
+                kalman_delta_t = now - kup_t_prev
+                
+                # write delta t's in A
+                A[0:3, 3:6] = np.identity(3) * kalman_delta_t
+                
+                
                 # store measurement for later velocity calculation
                 kc_xyz_prev = sensor_readings[i]
                 kc_t_prev = reading_times[i]
+                kup_t_prev = now
                 # obtain the sensor's covariance matrix
                 R_list.append(R_kc)
                 # define the rows in the H matrix that correspond to the given sensor
-                H_list.append(np.identity(3)) #only if we ignore velocity
+                H_list.append(np.identity(6))
             elif (sensor_names[i] == 'kd'):
+                # calculate velocity
+                z_delta = sensor_readings[i] - kd_z_prev
+                
+                # time between measurements of the same sensor (I think it's wrong):
+                kd_delta_t = reading_times[i] - kd_t_prev
+                
+                kd_vel = z_delta/kd_delta_t
+                
+                # fill measurement vector with measured coordinates and velocity
+                z_k_list.append(sensor_readings[i])
+                z_k_list.append(kd_vel)
+                
+                
+                # relevant in the state transition matrix A is the time between 
+                # the Kalman updates, not the time between measurements of the
+                # same sensor
+                now = time.time()
+                kalman_delta_t = now - kup_t_prev
+                
+                # write the delta_t belonging to vz in A
+                A[2, 5] = kalman_delta_t
+                
+                
+                
                 # store measurement for later velocity calculation
                 kd_z_prev = sensor_readings[i]
                 kd_t_prev = reading_times[i]
+                kup_t_prev = now
                 # obtain the sensor's covariance matrix
                 R_list.append(R_kd)
                 # define the rows in the H matrix that correspond to the given sensor
-                H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+                # this sensor just updates z and vz:
+                H_list.append(np.array([0, 0, 1, 0, 0, 1]))
+                
+                
+                
+                
             elif (sensor_names[i] == 'sim'):
+                # calculate velocity
+                z_delta = sensor_readings[i] - sim_z_prev
+                
+                # time between measurements of the same sensor (I think it's wrong):
+                sim_delta_t = reading_times[i] - sim_t_prev
+                
+                sim_vel = z_delta/sim_delta_t
+                
+                # fill measurement vector with measured coordinates and velocity
+                z_k_list.append(sensor_readings[i])
+                z_k_list.append(sim_vel)
+                
+                
+                # relevant in the state transition matrix A is the time between 
+                # the Kalman updates, not the time between measurements of the
+                # same sensor
+                now = time.time()
+                kalman_delta_t = now - kup_t_prev
+                
+                # write the delta_t belonging to vz in A
+                A[2, 5] = kalman_delta_t
+                
+                
+                
+                
                 # store measurement for later velocity calculation
                 sim_z_prev = sensor_readings[i]
                 sim_t_prev = reading_times[i]
+                kup_t_prev = now
                 # obtain the sensor's covariance matrix
                 R_list.append(R_sim)
                 # define the rows in the H matrix that correspond to the given sensor
-                H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+                # this sensor just updates z and vz:
+                H_list.append(np.array([0, 0, 1, 0, 0, 1]))
             else:
                 print("undefined keyword used in sensor_names in kalman_estimation()")
         
@@ -604,10 +691,25 @@ while True:
     else:
         sim_z = None
         #simsens_xyzt = None
-    #kalman_xyz = kalman_estimation([wc_xyz, np.array([sim_z])], [wc_t, sim_t], ['wc', 'sim'])
 
-    # Tests of velocity kalman of just wc_xyz for now:
+    # Kalman update with velocities of just wc_xyz for now:
     kalman_xyz = kalman_estimation([wc_xyz], [wc_t], ['wc'], method = 'velocity')
+    
+    # Kalman update with velocities of both, wc and sim
+    #kalman_xyz = kalman_estimation([wc_xyz, np.array([sim_z])], [wc_t, sim_t], ['wc', 'sim'], method = 'velocity')
+    
+    # Kalman update with velocities of just sim (happens often, when wc doesn't detect ArUco)
+    #kalman_xyz = kalman_estimation([sim_xyz], [sim_t], ['sim'], method = 'velocity')
+    
+    #here an example of wc_xyz being none, but sim in theory not none: the filter should still update with sim only.
+    #kalman_xyz = kalman_estimation([None, np.array([sim_z])], [wc_t, sim_t], ['wc', 'sim'], method = 'velocity')
+
+    
+    
+    
+    
+    
+    
 ##### Funktioniert! Als nächstes sim_z auch noch reinfusionieren!     #######
 
     ## UPDATE THE PLOT ##
