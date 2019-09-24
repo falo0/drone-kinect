@@ -5,7 +5,7 @@ Created on Tue Sep 24 16:02:57 2019
 
 @author: Dolan
 """
-#from mpl_toolkits.mplot3d import Axes3D #registers 3D projection, otherwise unused
+from mpl_toolkits.mplot3d import Axes3D #registers 3D projection, otherwise unused
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -35,8 +35,8 @@ else:
     axes.set_xlim([-0.5,0.5])
     axes.set_ylim([0, 7])
     axes.set_zlim([-0.3,0.3])
-    #scat = ax.scatter([], [], [], c='b', marker='o')   
-    scat = ax.scatter([], [], [], c=['r', 'b', 'g'], marker='o')    
+    scat = ax.scatter([], [], [], c='b', marker='o')   
+    #scat = ax.scatter([], [], [], c=['r', 'b', 'g'], marker='o')    
     
     
 def update_2dplot(coords):

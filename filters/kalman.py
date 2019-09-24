@@ -1,5 +1,14 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 24 15:45:35 2019
 
-## DEFINE SENSOR FUSION ALGORITHM ##
+@author: Dolan
+"""
+
+import numpy as np
+import time
+from datatypes import Datatype
 
 ### SET UP KALMAN FILTER ###
 # initialization of the state vector x. It contains the the 3 coordinates of a point
@@ -82,7 +91,6 @@ R_kd_vel = np.diag([R_kd[0], 0.005**2])
 
 R_sim_vel = np.diag([R_sim[0], 0.005**2])
 
-
 # Steady point linear kalman update
 def kalman_update_steady(z_k):
 
@@ -96,11 +104,11 @@ def kalman_update_steady(z_k):
 
     ### MEASURMENT UPDATE ###
     K_k = np.matmul(P_k_prior, np.linalg.inv(P_k_prior + R))
-    print(K_k)
+    #print(K_k)
 
     x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - x_k_prior))
     P_k_posterior = np.matmul((np.identity(3) - K_k), P_k_prior)
-    print(P_k_posterior)
+    #print(P_k_posterior)
 
     # The current _k becomes _prev for the next time step, therefore
     # update the global variables
@@ -122,20 +130,20 @@ def kalman_update_steady_multiple(z_k, H, R):
 
     ### MEASURMENT UPDATE ###
     K_k = np.matmul(np.matmul(P_k_prior, H.transpose()), np.linalg.inv(H @ P_k_prior @ H.transpose() + R))
-    print("Kalman Gain:")
-    print(K_k)
+    #print("Kalman Gain:")
+    #print(K_k)
 
     x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - np.matmul(H, x_k_prior)))
     P_k_posterior = np.matmul((np.identity(3) - np.matmul(K_k, H)), P_k_prior)
-    print(P_k_posterior)
+    #print(P_k_posterior)
 
     # The current _k becomes _prev for the next time step, therefore
     # update the global variables
     x_prev_posterior = x_k_posterior
     P_prev_posterior = P_k_posterior
 
-    print("kalman estimatoin:")
-    print(x_k_posterior)
+    #print("kalman estimatoin:")
+    #print(x_k_posterior)
 
     return(x_k_posterior)
 
@@ -151,45 +159,399 @@ def kalman_update_velocity(z_k, H, R, A):
 
     ### MEASURMENT UPDATE ###
     K_k = np.matmul(np.matmul(P_k_prior, H.transpose()), np.linalg.inv(H @ P_k_prior @ H.transpose() + R))
-    print("Kalman Gain:")
-    print(K_k)
+    #print("Kalman Gain:")
+    #print(K_k)
 
     x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - np.matmul(H, x_k_prior)))
     P_k_posterior = np.matmul((np.identity(6) - np.matmul(K_k, H)), P_k_prior)
-    print(P_k_posterior)
+    #print(P_k_posterior)
 
     # The current _k becomes _prev for the next time step, therefore
     # update the global variables
     x_prev_posterior_vel = x_k_posterior
     P_prev_posterior_vel = P_k_posterior
 
-    print("kalman estimatoin:")
-    print(x_k_posterior)
+    #print("kalman estimatoin:")
+    #print(x_k_posterior)
 
     return(x_k_posterior)
-
-#kalman_estimation expects a list of listes of localizations and identifiers of different sensors
-# e.g. update from kinect cam and kinect depth sensor:
-# e.g. sensor_readings, sensor_names = [kc_xyzt, kd_zt], ['kc', 'kd']
-# old: [[kc_xyzt, 'kc'], ['kc, 'kd']]
-# For testing:
-sensor_readings = [np.array([0.5, 0.5, 0.5]), np.array([0.4])]
-reading_times = [123456, 123456]
-sensor_names = ['kc', 'kd']
 
 
 # Storing values of previous invocations of kalman_estmiation, necessary to
 # calculate differences dx, dy, dz, dt and therefore velocities vx, vy, vz
 wc_xyz_prev = kc_xyz_prev = np.array([0,0,0])
 kd_z_prev = sim_z_prev = np.array([0])
-wc_t_prev = kc_t_prev = kd_t_prev = sim_t_prev = time.time()
+wc_t_prev = kc_t_prev = kd_t_prev = kup_t_prev = sim_t_prev = time.time()
+#sim_t_prev = np.array([time.time()])
+kup_txtytz = np.ones(3) * time.time()
+
+
+def filter(sensor_data, method = 'steady'):
+
+    sensor_num = len(sensor_data)
+    if(sensor_num == 0):
+        return None
+    if all(sensor.data is None for sensor in sensor_data):
+        if(method == 'steady'):
+            #print("All sensor readings were None, returning previous or initial Kalman estimation")
+            return x_prev_posterior
+        if(method == 'velocity'):
+            #print("All sensor readings were None, returning previous or initial Kalman estimation")
+            #print("support for state transition update with constant velocities assumed might come later")
+            return x_prev_posterior_vel
+
+    if (method == 'steady'):
+        # Create measurement vector z_k
+        #print(sensor_readings)
+
+        z_k_list = []
+
+        # simple list of the covariance matrices of all sensors
+        R_list = []
+
+        # simple list of submatrices that make up the H matrix
+        H_list = []
+
+        valid_sensor_num = 0
+
+        for i in range(sensor_num):
+            sensor = sensor_data[i]
+            if(sensor.data is not None):
+                valid_sensor_num += 1
+                #print(type(sensor.data))
+                z_k_list.append(sensor.data)
+                if(sensor.datatype == Datatype.WEBCAM_ARUCO):
+                    # obtain the sensor's covariance matrix
+                    R_list.append(R_wc)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    H_list.append(np.identity(3)) #only if we ignore velocity
+                elif (sensor.datatype == Datatype.KINECT_ARUCO):
+                    # obtain the sensor's covariance matrix
+                    R_list.append(R_kc)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    H_list.append(np.identity(3)) #only if we ignore velocity
+                elif (sensor.datatype == Datatype.KINECT_DEPTH):
+                    # obtain the sensor's covariance matrix
+                    R_list.append(R_kd)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+                #elif (sensor_names[i] == 'sim'):
+                    # obtain the sensor's covariance matrix
+                    #R_list.append(R_sim)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    #H_list.append(np.array([0, 0, 1])) #only if we ignore velocity
+                else:
+                    raise TypeError('Received undefined Datatype ' + str(sensor.datatype))
+            else:
+                pass
+                #print("The sensor reading of sensor " + sensor.datatype + " was None in this update, updating with the remaining 'not None' sensors")
+
+        #Convert z_k_list to the measurement vector (np.array) z_k
+        #print(z_k_list)
+        z_k = np.concatenate(z_k_list)
+        l = len(z_k)
+        #print(z_k)
+
+
+        #Convert H_list to the real measurement matrix H
+        #print(H_list)
+        H_comb = np.vstack(H_list)
+        #print("H")
+        #print(H_comb)
+        #Convert R_list to the real Cov-matrix of all combined Sensors
+        # Not generalized example with R_wc and R_sim
+        #R_comb = np.zeros((4, 4), float)
+        #R_comb[0:3, 0:3] = R_wc
+        #R_comb[3:4, 3:4] = R_sim
+        #R_list = [R_wc, R_sim]
+
+        # Initialize combined sensor covariance matrix
+        R_comb = np.zeros((l, l), float)
+
+        # Fill it with the covariance matrices of each sensor
+        last_element = 0
+        for i in range(valid_sensor_num):
+            own_length = len(R_list[i])
+            minidx = last_element
+            maxidx = last_element + own_length
+            R_comb[minidx:maxidx, minidx:maxidx] = R_list[i]
+            last_element += own_length
+
+        #print(R_comb)
+
+        #print(z_k)
+        #kalman_xyz = kalman_update_steady(z_k)
+        kalman_xyz = kalman_update_steady_multiple(z_k, H_comb, R_comb)
+        #print(kalman_xyz)
+        return kalman_xyz
+    elif (method == 'velocity'):
+
+         #global measurements_prev
+    #if(len(measurements_prev) == 0):
+        # initialize measuerements_prev
+    #    measurements_prev = measurements
+        global wc_xyz_prev, wc_t_prev, kc_xyz_prev, kc_t_prev, kd_z_prev
+        global kd_t_prev, sim_z_prev, sim_t_prev, kup_txtytz
+        #print(sim_z_prev)
+
+        # initialize measurement vector e.g. z_k = np.array([kc_x, kc_y, kc_z, kc_vx, kc_vy, kc_vz, kd_z, kd_vz])
+        z_k_list = []
+
+        # simple list of the covariance matrices of all sensors
+        R_list = []
+
+        # simple list of submatrices that make up the H matrix
+        H_list = []
+
+        # initialize A
+        A = np.identity(6)
+
+        valid_sensor_num = 0
+
+        for i in range(sensor_num):
+            sensor = sensor_data[i]
+            if(sensor.data is not None):
+
+                valid_sensor_num +=1
+
+                if(sensor.datatype == Datatype.WEBCAM_ARUCO):
+                    # calculate velocity
+                    xyz_delta = sensor.data - wc_xyz_prev
+
+                    # time between measurements of the same sensor (I think it's wrong):
+                    wc_delta_t = sensor.timestamp - wc_t_prev
+
+                    wc_vel = xyz_delta/wc_delta_t
+
+                    # fill measurement vector with measured coordinates and velocity
+                    z_k_list.append(sensor.data)
+                    z_k_list.append(wc_vel)
+
+
+                    # relevant in the state transition matrix A is the time between
+                    # the Kalman updates, not the time between measurements of the
+                    # same sensor
+                    now = time.time()
+                    kup_dtxdtydtz = now - kup_txtytz
+
+                    # write delta t's in A
+                    A[0:3, 3:6] = np.identity(3) * kup_dtxdtydtz
+
+                    # store measurement for later velocity calculation
+                    wc_xyz_prev = sensor.data
+                    wc_t_prev = sensor.timestamp
+                    kup_txtytz = np.ones(3) * now
+                    # obtain the sensor's covariance matrix
+                    R_list.append(R_wc_vel)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    H_list.append(np.identity(6))
+
+
+                elif (sensor.datatype == Datatype.KINECT_ARUCO):
+                    # calculate velocity
+                    xyz_delta = sensor.data - kc_xyz_prev
+
+                    # time between measurements of the same sensor (I think it's wrong):
+                    kc_delta_t = sensor.timestamp - kc_t_prev
+
+                    kc_vel = xyz_delta/kc_delta_t
+
+                    # fill measurement vector with measured coordinates and velocity
+                    z_k_list.append(sensor.data)
+                    z_k_list.append(kc_vel)
+
+
+                    # relevant in the state transition matrix A is the time between
+                    # the Kalman updates, not the time between measurements of the
+                    # same sensor
+                    now = time.time()
+                    kup_dtxdtydtz = now - kup_txtytz
+
+
+                    # write delta t's in A
+                    A[0:3, 3:6] = np.identity(3) * kup_dtxdtydtz
+
+
+                    # store measurement for later velocity calculation
+                    kc_xyz_prev = sensor.data
+                    kc_t_prev = sensor.timestamp
+                    kup_txtytz = np.ones(3) * now
+                    # obtain the sensor's covariance matrix
+                    R_list.append(R_kc_vel)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    H_list.append(np.identity(6))
+                elif (sensor.datatype == Datatype.KINECT_DEPTH):
+                    # calculate velocity
+                    z_delta = sensor.data - kd_z_prev
+
+                    # time between measurements of the same sensor (I think it's wrong):
+                    kd_delta_t = sensor.timestamp - kd_t_prev
+
+                    kd_vel = z_delta/kd_delta_t
+
+                    # fill measurement vector with measured coordinates and velocity
+                    z_k_list.append(sensor.data)
+                    z_k_list.append(kd_vel)
+
+
+                    # relevant in the state transition matrix A is the time between
+                    # the Kalman updates, not the time between measurements of the
+                    # same sensor
+                    now = time.time()
+                    #kup_dtz = now - kup_txtytz[2]
+
+                    kup_dtxdtydtz = now - kup_txtytz
+
+                    # write the delta_t belonging to vz in A, assume 0 velocity for not updated velocities:
+                    #A[2, 5] = kup_dtz
+                    # New approach according to Fabian, same delta t for all velocities:
+                    A[0:3, 3:6] = np.identity(3) * kup_dtxdtydtz
+
+
+                    # store measurement for later velocity calculation
+                    kd_z_prev = sensor.data
+                    kd_t_prev = sensor.timestamp
+                    #kup_txtytz[2] = now
+                    kup_txtytz = now
+                    # obtain the sensor's covariance matrix
+                    R_list.append(R_kd_vel)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    # this sensor just updates z and vz:
+                    H_list.append(np.array([[0, 0, 1, 0, 0, 0],
+                                            [0, 0, 0, 0, 0, 1]]))
+
+
+
+                    '''
+                elif (sensor_names[i] == 'sim'):
+                    # calculate velocity
+                    z_delta = sensor_readings[i] - sim_z_prev
+
+                    # time between measurements of the same sensor (I think it's wrong):
+                    sim_delta_t = reading_times[i] - sim_t_prev
+
+                    #print(sensor_readings[i])
+                    #print(sim_z_prev)
+                    #print(z_delta)
+                    #print(sim_delta_t)
+
+                    sim_vel = z_delta/sim_delta_t
+
+                    #print(sensor_readings[i])
+                    #print(z_delta, sim_delta_t)
+
+
+                    # fill measurement vector with measured coordinates and velocity
+                    z_k_list.append(sensor_readings[i])
+                    z_k_list.append(sim_vel)
+                    #print(z_k_list)
+
+                    # relevant in the state transition matrix A is the time between
+                    # the Kalman updates, not the time between measurements of the
+                    # same sensor
+                    now = time.time()
+                    #kup_dtz = now - kup_txtytz[2]
+                    kup_dtxdtydtz = now - kup_txtytz
+
+                    # write the delta_t belonging to vz in A, assume 0 velocity for not updated velocities:
+                    #A[2, 5] = kup_dtz
+                    # New approach according to Fabian, same delta t for all velocities:
+                    A[0:3, 3:6] = np.identity(3) * kup_dtxdtydtz
 
 
 
 
-def filter(dtime, coords):
+                    # store measurement for later velocity calculation
+                    sim_z_prev = sensor_readings[i]
+                    sim_t_prev = reading_times[i]
+                    #kup_txtytz[2] = now
+                    kup_txtytz = now
+                    # obtain the sensor's covariance matrix
+                    R_list.append(R_sim_vel)
+                    # define the rows in the H matrix that correspond to the given sensor
+                    # this sensor just updates z and vz:
+                    H_list.append(np.array([[0, 0, 1, 0, 0, 0],
+                                            [0, 0, 0, 0, 0, 1]]))
+                    '''
 
-	# TODO copy kalman_estimation after matching function definition to call
+                else:
+                    raise TypeError('Received undefined Datatype ' + str(sensor.datatype))
+            else:
+                pass
+                #print("The sensor reading of sensor " + sensor.datatype + " was None in this update, updating with the remaining 'not None' sensors")
 
-	return coords[0]
 
+        #print("A")
+        #print(A)
+
+        #Convert H_list to the real measurement matrix H
+        #print(H_list)
+        H_comb = np.vstack(H_list)
+        #print("H")
+        #print(H_comb)
+        #Convert R_list to the real Cov-matrix of all combined Sensors
+        # Not generalized example with R_wc and R_sim
+        #R_comb = np.zeros((4, 4), float)
+        #R_comb[0:3, 0:3] = R_wc
+        #R_comb[3:4, 3:4] = R_sim
+        #R_list = [R_wc, R_sim]
+
+
+        #Convert z_k_list of vectors to the single z_k vector
+        #print(z_k_list)
+        z_k = np.concatenate(z_k_list)
+        l = len(z_k)
+        #print("zk")
+        #print(z_k)
+
+        # Initialize combined sensor covariance matrix
+        R_comb = np.zeros((l, l), float)
+
+        # Fill it with the covariance matrices of each sensor
+        last_element = 0
+        for i in range(valid_sensor_num):
+            own_length = len(R_list[i])
+            minidx = last_element
+            maxidx = last_element + own_length
+            R_comb[minidx:maxidx, minidx:maxidx] = R_list[i]
+            last_element += own_length
+
+        #print(R_comb)
+
+
+
+        #print(z_k)
+        #kalman_xyz = kalman_update_steady(z_k)
+        kalman_xyzvxvyvz = kalman_update_velocity(z_k, H_comb, R_comb, A)
+        kalman_xyz = kalman_xyzvxvyvz[:3] #the velocities stay intern
+        #print(kalman_xyz)
+        return kalman_xyz
+
+
+
+#    if measurements[0][0] is not None:
+#        # Measurement vector z_k
+#        # For now it just takes the xyz of the first xyzt vector that it was given.
+#        z_k = measurements[0][0][:3]
+#        t_k = measurements[0][0][3]
+#        print(z_k)
+#        # extend the measurement vector by velocities
+#        meas_diff = measurements - measurements_prev
+#        print("maes_diff")
+#        print(meas_diff)
+#
+#        kalman_xyz = kalman_update_steady(z_k)
+#        print(kalman_xyz)
+#
+#        #------------------
+#        ### INCLUDING VELOCITY INTO STATE- AND MEASUREMENT-VECTOR ###
+#        # measurements_prev = measurements
+#        kalman_update_velocity(z_k)
+#
+#
+#
+#        #------------------
+#
+#        return kalman_xyz
+#    else:
+#        return None

@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+from filters import kalman
+from datatypes import Datatype, SensorData
+
+
 import argparse
 import cv2
 import numpy as np
+import time
 
-from filters import kalman
 
 parser = argparse.ArgumentParser(description='Track a drone via Kinect v2 camera')
 # module disable flags
@@ -22,42 +26,82 @@ parser.add_argument('--max-depth', dest='module_depth_max', nargs=1, type=int, d
 # webcam sensor
 parser.add_argument('--use-webcam', dest='sensor_webcam_enable', default=False, action='store_true', help='Enable the webcam sensor')
 
+# live plot
+parser.add_argument('--live-plot', dest='live_plot_enable', default=False, action='store_true', help='Enable live plotting of 3D estimation')
+
+
 args = parser.parse_args()
 
-enabled_sensors = []
 
 if not args.sensor_kinect_disable:
 	from sensors import kinect
-	enabled_sensors.append(kinect)
 	if not args.module_aruco_disable:
-		from libfreenect2.modules import aruco
-		kinect.register(aruco, args.module_aruco_render)
+		from modules import aruco
 	if not args.module_depth_disable:
-		from libfreenect2.modules import depth
+		from modules import depth
 		depth.set_range(args.module_depth_min, args.module_depth_max)
-		kinect.register(depth, args.module_depth_render)
 
 if args.sensor_webcam_enable:
-	# TODO implement webcam sensor, add aruco module
-	# TODO make modules global, create data_source enum as module_required_input
-	pass
+	from sensors import webcam
+	from modules import aruco
 
+if args.live_plot_enable:
+	from tools import liveplot
 
-while True:	
-	# TODO sensors should run in separate threads and send data directly to filter
-	datapoints = []
-	for sensor in enabled_sensors:
-		datapoints.append(sensor.getData())
-	
-	if len(datapoints) == 0:
-		print('No data')
-		continue
+while True:
+	results = []
+	if not args.sensor_kinect_disable:
+		# kinect_data as defined in kinect.KinectData
+		kinect_data = kinect.getData()
+		kinect_time = time.time()
+		if not args.module_aruco_disable:
+			results.append(
+				SensorData(
+					Datatype.KINECT_ARUCO,
+					aruco.calc(kinect_data, flip=True, render=args.module_aruco_render),
+					kinect_time
+				)
+			)
+		if not args.module_depth_disable:
+			results.append(
+				SensorData(
+					Datatype.KINECT_DEPTH,
+					depth.calc(kinect_data, args.module_depth_render),
+					kinect_time
+				)
+			)
 
-	if len(datapoints[0].coords) > 0:
-		filtered = kalman.filter(datapoints[0].dtime, datapoints[0].coords)
-		print('3D coords: %s' % (filtered))
-	else:
-		print('3D coords: NO DATA')
+	if args.sensor_webcam_enable:
+		# webcam data as defined in webcam.WebcamData
+		webcam_data = webcam.getData()
+		webcam_time = time.time()
+		if not args.module_aruco_disable:
+			results.append(
+				SensorData(
+					Datatype.WEBCAM_ARUCO,
+					aruco.calc(webcam_data, flip=False, render=args.module_aruco_render),
+					webcam_time
+				)
+			)
+
+	filtered_results = kalman.filter(results, method='velocity')
+	print('kalman result: %s' % ( str(filtered_results) ) )
+
+	if args.live_plot_enable:
+		plot_points = []
+		for i in results:
+			if i.data is None:
+				continue
+			if i.datatype == Datatype.KINECT_DEPTH:
+				plot_points.append(np.array([0, 0, i.data[0]]))
+			else:
+				plot_points.append(i.data)
+
+		plot_points.append(filtered_results)
+		coords = np.vstack(plot_points)
+		colors = ['r', 'b', 'g']
+		liveplot.update_3dplot(np.vstack(plot_points), colors)
+
 
 	# frame progression for rendered modules
 	cv2.waitKey(1)

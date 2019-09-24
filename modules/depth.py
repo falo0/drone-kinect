@@ -30,5 +30,6 @@ def calc(data, render):
 
 		cv2.imshow(__name__, depth_rgb)
 
-	return [x_mean, y_mean, data.depth[x_mean, y_mean]]
+	# return depth at pixel in meters
+	return np.array([data.depth[x_mean, y_mean] / 1000.0])
 
