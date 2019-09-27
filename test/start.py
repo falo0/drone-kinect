@@ -138,14 +138,14 @@ while True:
         #here an example of wc_xyz being none, but sim in theory not none: the filter should still update with sim only.
         #kalman_xyz = kalman_estimation([None, sim_z], [wc_t, sim_t], ['wc', 'sim'], method = 'velocity')
         
-        kalman_xyz = kal.kalman_estimation([wc_xyz, sim_z], [wc_t, sim_t], ['wc', 'sim'], method = 'velocity')
+        #kalman_xyz = kal.kalman_estimation([wc_xyz, sim_z], [wc_t, sim_t], ['wc', 'sim'], method = 'velocity')
 
     else:
         sim_z = None
         #simsens_xyzt = None
 
     # Kalman update with velocities of just wc_xyz for now:
-    #kalman_xyz = kalman_estimation([wc_xyz], [wc_t], ['wc'], method = 'velocity')
+    kalman_xyz = kal.kalman_estimation([wc_xyz], [wc_t], ['wc'], method = 'velocity')
     
     # Kalman update with velocities of both, wc and sim
     #kalman_xyz = kal.kalman_estimation([wc_xyz, sim_z], [wc_t, sim_t], ['wc', 'sim'], method = 'velocity')
@@ -177,6 +177,8 @@ while True:
         sim_xyz = np.array([0, 0, sim_z])
         
         coords = np.vstack([kalman_xyz, wc_xyz, sim_xyz])
+        #coords = np.vstack([kalman_xyz, wc_xyz])
+
         print(coords)
         colors = ['r', 'b', 'g']
         lplt.update_3dplot(np.vstack(coords), colors)

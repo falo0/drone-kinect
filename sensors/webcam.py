@@ -9,8 +9,10 @@ _webcam_data = WebcamData()
 
 def getData():
 	read_flag, frame = webcam_capture.read()
-	if frame == None:
+	if not read_flag:
 		raise IOError('No data from webcam.')
 	_webcam_data.rgb = frame
 	return _webcam_data
+
+
 

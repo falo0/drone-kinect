@@ -148,6 +148,13 @@ def kalman_update_steady_multiple(z_k, H, R):
     return(x_k_posterior)
 
 # constant velocity linear kalman update
+def time_update(A):
+    global x_prev_posterior_vel
+    x_k_prior = np.matmul(A, x_prev_posterior_vel)
+    P_k_prior = A @ P_prev_posterior_vel @ A.transpose() + Q_vel
+    # The current _k becomes _prev for the next time step, therefore
+    # update the global variables
+    x_prev_posterior_vel = x_k_posterior
 def kalman_update_velocity(z_k, H, R, A):
     global x_prev_posterior_vel
     global P_prev_posterior_vel
@@ -155,16 +162,18 @@ def kalman_update_velocity(z_k, H, R, A):
     ### TIME UPDATE ###
     x_k_prior = np.matmul(A, x_prev_posterior_vel)
     P_k_prior = A @ P_prev_posterior_vel @ A.transpose() + Q_vel
+    
+    #time_update(A)
 
 
     ### MEASURMENT UPDATE ###
     K_k = np.matmul(np.matmul(P_k_prior, H.transpose()), np.linalg.inv(H @ P_k_prior @ H.transpose() + R))
     #print("Kalman Gain:")
     #print(K_k)
-
     x_k_posterior = x_k_prior + np.matmul(K_k, (z_k - np.matmul(H, x_k_prior)))
     P_k_posterior = np.matmul((np.identity(6) - np.matmul(K_k, H)), P_k_prior)
     #print(P_k_posterior)
+
 
     # The current _k becomes _prev for the next time step, therefore
     # update the global variables
@@ -175,6 +184,9 @@ def kalman_update_velocity(z_k, H, R, A):
     #print(x_k_posterior)
 
     return(x_k_posterior)
+    
+
+    
 
 
 # Storing values of previous invocations of kalman_estmiation, necessary to

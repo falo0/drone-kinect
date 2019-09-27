@@ -11,13 +11,15 @@ distortion_coefficients = cam_config_file.getNode("dist_coeff").mat()
 def calc(data, flip, render):
 	global matrix_coefficients
 	global distortion_coefficients
+	
+	#print(data.rgb)
 
 	frame = cv2.flip(data.rgb[:,:,0:3], 1) if flip else data.rgb[:,:,0:3]
 	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 	param = cv2.aruco.DetectorParameters_create()
-	#dictio = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
-	dictio = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+	dictio = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
+	#dictio = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 	corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, dictio, parameters=param)
     
 	global marker_length
@@ -31,10 +33,3 @@ def calc(data, flip, render):
 	if tvec is not None:
 		return tvec[0,0] #assuming there is only one marker in the image
 	return None
-
-	
-	if len(corners) > 0:
-		#TODO calc marker distance and center
-		return corners[0]
-	return None
-
